@@ -54,7 +54,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
     };
 
     await axios.post(
-      "https://api.palletforce.com/UploadManifest",
+      "https://apiuat.palletforce.net/api/ExternalScanning/UploadManifest",
       payload,
       { headers: { "Content-Type": "application/json" } }
     );
