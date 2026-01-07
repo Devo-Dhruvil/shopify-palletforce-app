@@ -32,10 +32,14 @@ app.post("/webhooks/order-paid", async (req, res) => {
   try {
     console.log("📦 Webhook received");
 
-    if (!verifyShopifyWebhook(req)) {
-      console.log("❌ Invalid webhook signature");
-      return res.status(401).send("Invalid signature");
-    }
+    // if (!verifyShopifyWebhook(req)) {
+    //   console.log("❌ Invalid webhook signature");
+    //   return res.status(401).send("Invalid signature");
+    // }
+
+    // TEMP: Disable signature check for testing
+console.log("⚠️ Signature check skipped (testing mode)");
+
 
     const order = req.body;
     console.log("✅ Order:", order.order_number);
