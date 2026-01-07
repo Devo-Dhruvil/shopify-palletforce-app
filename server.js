@@ -85,7 +85,6 @@ console.log("⚠️ Signature check skipped (testing mode)");
           serviceName: "A",
           customersUniqueReference: order.order_number.toString(),
           insuranceCode: "05",
-          acceptedStatus: "Y",
         },
       ],
     };
