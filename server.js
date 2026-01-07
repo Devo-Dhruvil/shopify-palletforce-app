@@ -1,36 +1,49 @@
 const express = require("express");
-const bodyParser = require("body-parser");
 const axios = require("axios");
+const crypto = require("crypto");
 
 const app = express();
 
-// Shopify sends JSON
-app.use(bodyParser.json());
+/**
+ * REQUIRED: Raw body for Shopify webhook verification
+ */
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 
-// Health check (optional)
-app.get("/", (req, res) => {
-  res.send("Shopify → Palletforce service running");
-});
+/**
+ * Verify Shopify Webhook
+ */
+function verifyShopifyWebhook(req) {
+  const hmac = req.headers["x-shopify-hmac-sha256"];
+  const digest = crypto
+    .createHmac("sha256", process.env.SHOPIFY_WEBHOOK_SECRET)
+    .update(req.rawBody)
+    .digest("base64");
 
-// Shopify ORDER PAID webhook
+  return digest === hmac;
+}
+
 app.post("/webhooks/order-paid", async (req, res) => {
   try {
-    console.log("📦 Shopify order webhook received");
+    console.log("📦 Webhook received");
 
-    const order = req.body;
-
-    if (!order || !order.order_number) {
-      console.error("❌ Invalid order payload");
-      return res.status(400).send("Invalid order");
+    if (!verifyShopifyWebhook(req)) {
+      console.log("❌ Invalid webhook signature");
+      return res.status(401).send("Invalid signature");
     }
 
-    console.log("🧾 Order Number:", order.order_number);
+    const order = req.body;
+    console.log("✅ Order:", order.order_number);
 
-    const shipping = order.shipping_address || {};
-
-    // Build Palletforce payload
     const payload = {
+      accessKey: process.env.PF_ACCESS_KEY,
       uniqueTransactionNumber: `SHOPIFY-${order.order_number}`,
+
       collectionAddress: {
         name: "YOUR COMPANY NAME",
         streetAddress: "WAREHOUSE ADDRESS",
@@ -38,17 +51,19 @@ app.post("/webhooks/order-paid", async (req, res) => {
         postcode: "POSTCODE",
         countryCode: "GB",
         phoneNumber: "0000000000",
-        contactName: "Warehouse"
+        contactName: "Warehouse",
       },
+
       deliveryAddress: {
-        name: shipping.name || "Customer",
-        streetAddress: shipping.address1 || "",
-        town: shipping.city || "",
-        postcode: shipping.zip || "",
-        countryCode: shipping.country_code || "GB",
-        phoneNumber: shipping.phone || "0000000000",
-        contactName: shipping.name || "Customer"
+        name: order.shipping_address.name,
+        streetAddress: order.shipping_address.address1,
+        town: order.shipping_address.city,
+        postcode: order.shipping_address.zip,
+        countryCode: order.shipping_address.country_code,
+        phoneNumber: order.shipping_address.phone || "000000000",
+        contactName: order.shipping_address.name,
       },
+
       consignments: [
         {
           requestingDepot: "075",
@@ -57,64 +72,34 @@ app.post("/webhooks/order-paid", async (req, res) => {
           datesAndTimes: [
             {
               dateTimeType: "COLD",
-              value: order.created_at
-                ? order.created_at.substring(0, 10).replace(/-/g, "")
-                : ""
-            }
+              value: order.created_at.substring(0, 10).replace(/-/g, ""),
+            },
           ],
-          pallets: [
-            {
-              palletType: "H",
-              numberofPallets: "1"
-            }
-          ],
+          pallets: [{ palletType: "H", numberofPallets: "1" }],
           palletSpaces: "1",
-          weight: Math.max(
-            1,
-            Math.ceil((order.total_weight || 1000) / 1000)
-          ).toString(),
+          weight: Math.ceil(order.total_weight / 1000).toString(),
           serviceName: "A",
           customersUniqueReference: order.order_number.toString(),
           insuranceCode: "05",
-          acceptedStatus: "Y"
-        }
-      ]
+          acceptedStatus: "Y",
+        },
+      ],
     };
 
-    console.log("➡️ Sending manifest to Palletforce...");
-
-    const response = await axios.post(
-      process.env.PF_UPLOAD_URL,
+    const pfResponse = await axios.post(
+      "https://apiuat.palletforce.net/api/ExternalScanning/UploadManifest",
       payload,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "AccessKey": process.env.PF_ACCESS_KEY
-        },
-        timeout: 15000
-      }
+      { headers: { "Content-Type": "application/json" } }
     );
 
-    console.log("✅ Palletforce response status:", response.status);
-    console.log("📨 Palletforce response data:", response.data);
+    console.log("🚚 Palletforce response:", pfResponse.data);
 
     res.status(200).send("OK");
   } catch (error) {
-    console.error("❌ Palletforce API error");
-
-    if (error.response) {
-      console.error("Status:", error.response.status);
-      console.error("Data:", error.response.data);
-    } else {
-      console.error(error.message);
-    }
-
+    console.error("🔥 Error:", error.response?.data || error.message);
     res.status(500).send("Error");
   }
 });
 
-// Start server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("🚀 Server running on port", PORT);
-});
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log("Server running on port", PORT));
