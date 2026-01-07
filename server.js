@@ -70,9 +70,9 @@ console.log("⚠️ Signature check skipped (testing mode)");
 
       consignments: [
         {
-          requestingDepot: "075",
+          requestingDepot: "121",
           consignmentNumber: order.order_number.toString(),
-          CustomerAccountNumber: "YOUR_PF_ACCOUNT",
+          CustomerAccountNumber: "Indi 001",
           datesAndTimes: [
             {
               dateTimeType: "COLD",
