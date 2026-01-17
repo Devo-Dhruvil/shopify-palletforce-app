@@ -1,13 +1,78 @@
 {
-  "name": "shopify-palletforce-app",
-  "version": "1.0.0",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
+  "accessKey": "YOUR_PALLETFORCE_ACCESS_KEY",
+  "uniqueTransactionNumber": "SHOPIFY-TEST-ORDER",
+  "collectionAddress": {
+    "name": "Your Company Name",
+    "streetAddress": "Warehouse Street",
+    "location": "",
+    "town": "Your Town",
+    "county": "",
+    "postcode": "POSTCODE",
+    "countryCode": "GB",
+    "phoneNumber": "00000000000",
+    "contactName": "Warehouse Team"
   },
-  "dependencies": {
-    "express": "^4.19.2",
-    "axios": "^1.6.8",
-    "body-parser": "^1.20.2"
-  }
+  "deliveryAddress": {
+    "name": "Customer Name",
+    "streetAddress": "Delivery Street",
+    "location": "",
+    "town": "Delivery Town",
+    "county": "",
+    "postcode": "POSTCODE",
+    "countryCode": "GB",
+    "phoneNumber": "00000000000",
+    "contactName": "Customer Name"
+  },
+  "consignments": [
+    {
+      "requestingDepot": "121",
+      "collectingDepot": "",
+      "deliveryDepot": "",
+      "trackingNumber": "",
+      "consignmentNumber": "10001",
+      "CustomerAccountNumber": "YOUR_ACCOUNT_CODE",
+      "datesAndTimes": [
+        {
+          "dateTimeType": "COLD",
+          "value": "20240107"
+        }
+      ],
+      "pallets": [
+        {
+          "palletType": "H",
+          "numberofPallets": "1"
+        }
+      ],
+      "palletSpaces": "1",
+      "weight": "100",
+      "serviceName": "A",
+      "surcharges": "",
+      "customersUniqueReference": "ORDER-10001",
+      "customersUniqueReference2": "",
+      "notes": [
+        {
+          "noteName": "NOTE1",
+          "value": ""
+        }
+      ],
+      "insuranceCode": "05",
+      "customerCharge": "",
+      "nonPalletforceConsignment": "",
+      "deliveryVehicleCode": "",
+      "consignmentType": "",
+      "hubIdentifyingCode": "",
+      "notifications": [
+        {
+          "notificationType": "EMAIL",
+          "value": "customer@example.com"
+        }
+      ],
+      "cartonCount": "",
+      "aSNFBABOLReferenceNumber": "",
+      "additionalDetails": {
+        "lines": []
+      },
+      "acceptedStatus": "N"
+    }
+  ]
 }
