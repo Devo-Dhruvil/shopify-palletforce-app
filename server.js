@@ -136,12 +136,31 @@ app.post("/webhooks/order-paid", async (req, res) => {
     res.status(200).send("OK");
 
   } catch (error) {
-    console.error(
-      "🔥 ERROR:",
-      error.response?.data || error.message || error
-    );
-    res.status(500).send("ERROR");
+  console.log("🔥 FULL PF ERROR RAW ↓↓↓");
+
+  if (error.response?.data) {
+    console.log(JSON.stringify(error.response.data, null, 2));
+
+    // Print deep failure reasons
+    if (error.response.data.failedConsignments?.length > 0) {
+      console.log("🔥 FAILURE REASONS ↓↓↓");
+      console.log(
+        JSON.stringify(
+          error.response.data.failedConsignments[0].failureReasons,
+          null,
+          2
+        )
+      );
+    }
+  } else {
+    console.log("🔥 ERROR:", error.message);
   }
+
+  res.status(500).send("ERROR");
+}
+
+
+  
 });
 
 const PORT = process.env.PORT || 10000;
