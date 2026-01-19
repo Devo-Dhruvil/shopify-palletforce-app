@@ -110,7 +110,7 @@ function convertOrderToPalletforce(order) {
           lines: []
         },
 
-        acceptedStatus: "Y"   // REQUIRED
+       // acceptedStatus: "Y"   // REQUIRED
       }
     ]
   };
