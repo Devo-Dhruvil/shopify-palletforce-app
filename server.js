@@ -135,14 +135,16 @@ app.post("/webhooks/order-paid", async (req, res) => {
     console.log("🚚 PF Response:", response.data);
     res.status(200).send("OK");
 
-  } catch (error) {
-  console.log("🔥 FULL PF ERROR RAW ↓↓↓");
+} catch (error) {
+  console.log("🔥 FULL PALLETFORCE ERROR RAW ↓↓↓");
 
   if (error.response?.data) {
     console.log(JSON.stringify(error.response.data, null, 2));
 
-    // Print deep failure reasons
-    if (error.response.data.failedConsignments?.length > 0) {
+    if (
+      error.response.data.failedConsignments &&
+      error.response.data.failedConsignments.length > 0
+    ) {
       console.log("🔥 FAILURE REASONS ↓↓↓");
       console.log(
         JSON.stringify(
@@ -156,8 +158,9 @@ app.post("/webhooks/order-paid", async (req, res) => {
     console.log("🔥 ERROR:", error.message);
   }
 
-  res.status(500).send("ERROR");
+  return res.status(500).send("ERROR");
 }
+
 
 
   
