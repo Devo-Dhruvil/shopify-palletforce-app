@@ -84,9 +84,7 @@
 
       "additionalDetails": {
         "lines": []
-      }
-
-      <!-- ❌ DO NOT INCLUDE acceptedStatus -->
+      } 
     }
   ]
 }
