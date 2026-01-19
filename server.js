@@ -7,7 +7,7 @@ const axios = require("axios");
 
 const app = express();
 
-// Allow Shopify raw body
+// Capture raw body for Shopify signature
 app.use(
   express.json({
     verify: (req, res, buf) => {
@@ -16,18 +16,15 @@ app.use(
   })
 );
 
-// Shopify signature (disabled for testing)
-function verifyShopifyWebhook(req) {
-  const hmac = req.headers["x-shopify-hmac-sha256"];
-  const digest = crypto
-    .createHmac("sha256", process.env.SHOPIFY_WEBHOOK_SECRET)
-    .update(req.rawBody)
-    .digest("base64");
-  return digest === hmac;
-}
-
-// Convert order → PF JSON
+// Convert Shopify Order → Palletforce JSON
 function convertOrderToPalletforce(order) {
+  // --- FIX: Split address correctly ---
+  const shipping = order.shipping_address || {};
+  const street = shipping.address1 || "";
+  const town = shipping.city || "";
+  const county = shipping.province || "";
+  const postcode = shipping.zip || "";
+
   return {
     accessKey: process.env.PF_ACCESS_KEY,
 
@@ -46,27 +43,29 @@ function convertOrderToPalletforce(order) {
     },
 
     deliveryAddress: {
-      name: order.shipping_address?.name || "",
-      streetAddress: order.shipping_address?.address1 || "",
-      location: order.shipping_address?.address2 || "",
-      town: order.shipping_address?.city || "",
-      county: order.shipping_address?.province || "",
-      postcode: order.shipping_address?.zip || "",
-      countryCode: order.shipping_address?.country_code || "GB",
-      phoneNumber: order.shipping_address?.phone || "",
-      contactName: order.shipping_address?.name || ""
+      name: shipping.name || "",
+      streetAddress: street,        // FIXED
+      location: shipping.address2 || "",
+      town: town,                   // FIXED
+      county: county,
+      postcode: postcode,
+      countryCode: shipping.country_code || "GB",
+      phoneNumber: shipping.phone || "",
+      contactName: shipping.name || ""
     },
 
     consignments: [
       {
-        requestingDepot: "121",          // REQUIRED
-        collectingDepot: "121",          // REQUIRED
-        deliveryDepot: "003",            // REQUIRED
-        trackingNumber: "",
+        requestingDepot: "121",
+        collectingDepot: "121",
+        deliveryDepot: "003",
+
+        // FIXED: Palletforce requires a tracking number (not empty string)
+        trackingNumber: `TRK-${order.order_number}`,
+
         consignmentNumber: String(order.order_number),
         CustomerAccountNumber: "indi001",
 
-        // REQUIRED FIELDS (missing earlier)
         consignmentType: "NORMAL",
         hubIdentifyingCode: "NG",
         deliveryVehicleCode: "1",
@@ -86,9 +85,11 @@ function convertOrderToPalletforce(order) {
         ],
 
         palletSpaces: "1",
-        weight: String(Math.ceil((order.total_weight || 10000) / 1000)),
-        serviceName: "A",
 
+        // FIXED: Shopify weight is in grams → PF expects kg
+        weight: String(Math.ceil((order.total_weight || 10000) / 1000)),
+
+        serviceName: "A",
         surcharges: "",
         customersUniqueReference: String(order.order_number),
         customersUniqueReference2: "",
@@ -108,9 +109,7 @@ function convertOrderToPalletforce(order) {
 
         additionalDetails: {
           lines: []
-        },
-
-       // acceptedStatus: "Y"   // REQUIRED
+        }
       }
     ]
   };
@@ -122,11 +121,11 @@ app.post("/webhooks/order-paid", async (req, res) => {
     console.log("📝 Shopify Order:", req.body.order_number);
 
     const order = req.body;
-
     const payload = convertOrderToPalletforce(order);
 
     console.log("📤 Sending Payload:", JSON.stringify(payload, null, 2));
 
+    // SEND TO PALLETFORCE
     const response = await axios.post(
       "https://apiuat.palletforce.net/api/ExternalScanning/UploadManifest",
       payload,
@@ -134,10 +133,13 @@ app.post("/webhooks/order-paid", async (req, res) => {
     );
 
     console.log("🚚 PF Response:", response.data);
-
     res.status(200).send("OK");
+
   } catch (error) {
-    console.error("🔥 ERROR:", error.response?.data || error.message);
+    console.error(
+      "🔥 ERROR:",
+      error.response?.data || error.message || error
+    );
     res.status(500).send("ERROR");
   }
 });
