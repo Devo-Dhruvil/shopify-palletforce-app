@@ -112,7 +112,7 @@ function convertOrderToPalletforce(order) {
         cartonCount: "",
         aSNFBABOLReferenceNumber: "",
         additionalDetails: { lines: [] },
-        acceptedStatus: "N"
+        acceptedStatus: "Y"
       }
     ]
   };
