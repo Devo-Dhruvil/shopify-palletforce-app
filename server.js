@@ -65,7 +65,7 @@ function convertOrderToPalletforce(order) {
         ],
 
         palletSpaces: "1",
-        weight: String(Math.ceil((order.total_weight || 1000) / 1000)),
+        weight: String(Math.ceil(order.total_weight / 1000)),
 
         serviceName: process.env.PF_SERVICE || "A",
         customersUniqueReference: String(order.order_number),
