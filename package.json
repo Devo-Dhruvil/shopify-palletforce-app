@@ -1,14 +1,60 @@
 {
-  "name": "shopify-palletforce-app",
-  "version": "1.0.0",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
+  "accessKey": "YOUR_PF_ACCESS_KEY",
+  "uniqueTransactionNumber": "SHOPIFY-1014",
+  "collectionAddress": {
+    "name": "Indistone Ltd",
+    "streetAddress": "Unit 2, Courtyard 31",
+    "location": "Normanton Industrial Estate",
+    "town": "Peterborough",
+    "county": "",
+    "postcode": "PE11 1EJ",
+    "countryCode": "GB",
+    "phoneNumber": "01775347904",
+    "contactName": "Warehouse Team"
   },
-  "dependencies": {
-    "express": "^4.19.2",
-    "crypto": "^1.0.1",
-    "axios": "^1.6.8",
-    "dotenv": "^16.4.5"
-  }
+  "deliveryAddress": {
+    "name": "Customer Name",
+    "streetAddress": "Street 1",
+    "location": "",
+    "town": "City",
+    "county": "",
+    "postcode": "POSTCODE",
+    "countryCode": "GB",
+    "phoneNumber": "",
+    "contactName": "Customer Name"
+  },
+  "consignments": [
+    {
+      "requestingDepot": "121",
+      "consignmentNumber": "1014",
+      "CustomerAccountNumber": "indi001",
+      "datesAndTimes": [
+        {
+          "dateTimeType": "COLD",
+          "value": "20260117"
+        }
+      ],
+      "pallets": [
+        {
+          "palletType": "H",
+          "numberofPallets": "1"
+        }
+      ],
+      "palletSpaces": "1",
+      "weight": "950",
+      "serviceName": "A",
+      "customersUniqueReference": "1014",
+      "notes": [],
+      "insuranceCode": "05",
+      "notifications": [
+        {
+          "notificationType": "EMAIL",
+          "value": "customer@example.com"
+        }
+      ],
+      "additionalDetails": {
+        "lines": []
+      }
+    }
+  ]
 }
