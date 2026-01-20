@@ -141,30 +141,50 @@ app.post("/webhooks/order-paid", async (req, res) => {
     console.log("🚚 PF Response:", response.data);
 
     res.status(200).send("OK");
-  }  catch (error) {
+  }
+
+  catch (error) {
   console.log("🔥 FULL PALLETFORCE ERROR RAW ↓↓↓");
 
+  // 1. Print the entire error including nested objects
+  console.log(
+    "🔥 ERROR OBJECT:",
+    JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+  );
+
+  // 2. Print PF response data
   if (error.response?.data) {
+    console.log("🔥 PF RESPONSE DATA ↓↓↓");
     console.log(JSON.stringify(error.response.data, null, 2));
+  }
 
-    // ⭐ INSERTED HERE — prints the real PF errors
-    if (error.response?.data?.failedConsignments?.length > 0) {
-      console.log("🔥 FAILURE REASONS:");
-      console.log(
-        JSON.stringify(
-          error.response.data.failedConsignments[0].failureReasons,
-          null,
-          2
-        )
-      );
-    }
+  // 3. Print failedConsignments full object
+  if (error.response?.data?.failedConsignments) {
+    console.log("🔥 FAILED CONSIGNMENTS ↓↓↓");
+    console.log(
+      JSON.stringify(error.response.data.failedConsignments, null, 2)
+    );
+  }
 
-  } else {
-    console.log("🔥 ERROR:", error.message);
+  // 4. Print ONLY failure reasons clearly
+  if (
+    error.response?.data?.failedConsignments &&
+    error.response.data.failedConsignments.length > 0
+  ) {
+    console.log("🔥 FAILURE REASONS ↓↓↓");
+    console.log(
+      JSON.stringify(
+        error.response.data.failedConsignments[0].failureReasons,
+        null,
+        2
+      )
+    );
   }
 
   return res.status(500).send("ERROR");
 }
+
+  
 
 });
 
