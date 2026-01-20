@@ -1,13 +1,11 @@
-// server.js
 require("dotenv").config();
-
 const express = require("express");
 const crypto = require("crypto");
 const axios = require("axios");
 
 const app = express();
 
-// Capture raw body for Shopify signature
+// Capture raw body
 app.use(
   express.json({
     verify: (req, res, buf) => {
@@ -16,14 +14,8 @@ app.use(
   })
 );
 
-// Convert Shopify Order → Palletforce JSON
 function convertOrderToPalletforce(order) {
-  // --- FIX: Split address correctly ---
   const shipping = order.shipping_address || {};
-  const street = shipping.address1 || "";
-  const town = shipping.city || "";
-  const county = shipping.province || "";
-  const postcode = shipping.zip || "";
 
   return {
     accessKey: process.env.PF_ACCESS_KEY,
@@ -44,11 +36,11 @@ function convertOrderToPalletforce(order) {
 
     deliveryAddress: {
       name: shipping.name || "",
-      streetAddress: street,        // FIXED
+      streetAddress: shipping.address1 || "",
       location: shipping.address2 || "",
-      town: town,                   // FIXED
-      county: county,
-      postcode: postcode,
+      town: shipping.city || "",
+      county: shipping.province || "",
+      postcode: shipping.zip || "",
       countryCode: shipping.country_code || "GB",
       phoneNumber: shipping.phone || "",
       contactName: shipping.name || ""
@@ -56,19 +48,15 @@ function convertOrderToPalletforce(order) {
 
     consignments: [
       {
-        requestingDepot: "121",
-        collectingDepot: "121",
-        deliveryDepot: "003",
+        requestingDepot: "121",          // PF confirmed
+        collectingDepot: "",             // MUST BE EMPTY
+        deliveryDepot: "",               // MUST BE EMPTY
 
-        // FIXED: Palletforce requires a tracking number (not empty string)
-        trackingNumber: `TRK-${order.order_number}`,
-
+        trackingNumber: "",              // PF requires empty
         consignmentNumber: String(order.order_number),
-        CustomerAccountNumber: "indi001",
 
-        consignmentType: "NORMAL",
-        hubIdentifyingCode: "NG",
-        deliveryVehicleCode: "1",
+        // PF confirmed account has a space
+        CustomerAccountNumber: "indi 001",
 
         datesAndTimes: [
           {
@@ -85,8 +73,6 @@ function convertOrderToPalletforce(order) {
         ],
 
         palletSpaces: "1",
-
-        // FIXED: Shopify weight is in grams → PF expects kg
         weight: String(Math.ceil((order.total_weight || 10000) / 1000)),
 
         serviceName: "A",
@@ -95,21 +81,43 @@ function convertOrderToPalletforce(order) {
         customersUniqueReference2: "",
 
         notes: [
-          { noteName: "NOTE1", value: "" }
+          {
+            noteName: "",
+            value: ""
+          }
         ],
 
         insuranceCode: "05",
+        customerCharge: "",
+        nonPalletforceConsignment: "",
+        deliveryVehicleCode: "",
+        consignmentType: "",
+        hubIdentifyingCode: "",
 
         notifications: [
           {
-            notificationType: "EMAIL",
+            notificationType: "email",       // PF uses lowercase email
             value: order.email
           }
         ],
 
+        cartonCount: "",
+        aSNFBABOLReferenceNumber: "",
+
         additionalDetails: {
-          lines: []
-        }
+          lines: [
+            {
+              fields: [
+                {
+                  fieldName: "",
+                  value: ""
+                }
+              ]
+            }
+          ]
+        },
+
+        acceptedStatus: "N"   // PF requires this
       }
     ]
   };
@@ -117,15 +125,13 @@ function convertOrderToPalletforce(order) {
 
 app.post("/webhooks/order-paid", async (req, res) => {
   try {
-    console.log("📦 Webhook received");
-    console.log("📝 Shopify Order:", req.body.order_number);
+    console.log("📦 Webhook received", req.body.order_number);
 
     const order = req.body;
     const payload = convertOrderToPalletforce(order);
 
-    console.log("📤 Sending Payload:", JSON.stringify(payload, null, 2));
+    console.log("📤 Sending:", JSON.stringify(payload, null, 2));
 
-    // SEND TO PALLETFORCE
     const response = await axios.post(
       "https://apiuat.palletforce.net/api/ExternalScanning/UploadManifest",
       payload,
@@ -133,38 +139,13 @@ app.post("/webhooks/order-paid", async (req, res) => {
     );
 
     console.log("🚚 PF Response:", response.data);
+
     res.status(200).send("OK");
-
-} catch (error) {
-  console.log("🔥 FULL PALLETFORCE ERROR RAW ↓↓↓");
-
-  if (error.response?.data) {
-    console.log(JSON.stringify(error.response.data, null, 2));
-
-    if (
-      error.response.data.failedConsignments &&
-      error.response.data.failedConsignments.length > 0
-    ) {
-      console.log("🔥 FAILURE REASONS ↓↓↓");
-      console.log(
-        JSON.stringify(
-          error.response.data.failedConsignments[0].failureReasons,
-          null,
-          2
-        )
-      );
-    }
-  } else {
-    console.log("🔥 ERROR:", error.message);
+  } catch (error) {
+    console.log("🔥 FULL PF ERROR:", error.response?.data || error.message);
+    res.status(500).send("ERROR");
   }
-
-  return res.status(500).send("ERROR");
-}
-
-
-
-  
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log("🚀 Server running on port", PORT));
+app.listen(PORT, () => console.log("🚀 Running on", PORT));
