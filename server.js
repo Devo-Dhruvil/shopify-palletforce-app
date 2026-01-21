@@ -1,11 +1,15 @@
+/**
+ * FINAL WORKING PALLETFORCE INTEGRATION (AUTO DEPOT ROUTING)
+ */
+
+require("dotenv").config();
 const express = require("express");
 const crypto = require("crypto");
 const axios = require("axios");
-require("dotenv").config();
 
 const app = express();
 
-// Shopify raw body parser (required for signature verification)
+// Keep raw body for Shopify webhook validation
 app.use(
   express.json({
     verify: (req, res, buf) => {
@@ -14,12 +18,46 @@ app.use(
   })
 );
 
-// Convert Shopify → Palletforce JSON
-function convertOrderToPF(order) {
-  const shipping = order.shipping_address || {};
+// OPTIONAL – skip validation during testing
+function verifyShopifyWebhook(req) {
+  const hmac = req.headers["x-shopify-hmac-sha256"];
+  const digest = crypto
+    .createHmac("sha256", process.env.SHOPIFY_WEBHOOK_SECRET)
+    .update(req.rawBody)
+    .digest("base64");
+
+  return digest === hmac;
+}
+
+/**
+ * AUTO DEPOT MAPPING (VERY IMPORTANT)
+ * Add more depot codes if needed
+ */
+function getDepotByPostcode(postcode) {
+  if (!postcode) return "";
+
+  const area = postcode.substring(0, 2).toUpperCase();
+
+  const depotMap = {
+    "PE": "121", // Peterborough
+    "WF": "078", // West Yorkshire
+    "NG": "003", // Nottingham
+    "LE": "009"  // Leicester
+    // Add more if Palletforce gives you the full routing list
+  };
+
+  return depotMap[area] || "";
+}
+
+/**
+ * Convert Shopify → Palletforce JSON
+ */
+function convertOrderToPalletforce(order) {
+  const ship = order.shipping_address;
 
   return {
     accessKey: process.env.PF_ACCESS_KEY,
+
     uniqueTransactionNumber: `SHOPIFY-${order.order_number}`,
 
     collectionAddress: {
@@ -35,32 +73,31 @@ function convertOrderToPF(order) {
     },
 
     deliveryAddress: {
-      name: shipping.name || "",
-      streetAddress: shipping.address1 || "",
-      location: shipping.address2 || "",
-      town: shipping.city || "",
-      county: shipping.province || "",
-      postcode: shipping.zip || "",
-      countryCode: shipping.country_code || "GB",
-      phoneNumber: shipping.phone || "",
-      contactName: shipping.name || "",
+      name: ship?.name || "",
+      streetAddress: ship?.address1 || "",
+      location: ship?.address2 || "",
+      town: ship?.city || "",
+      county: ship?.province || "",
+      postcode: ship?.zip || "",
+      countryCode: ship?.country_code || "GB",
+      phoneNumber: ship?.phone || "",
+      contactName: ship?.name || "",
     },
 
     consignments: [
       {
         requestingDepot: "121",
         collectingDepot: "",
-        deliveryDepot: "",
-
+        deliveryDepot: getDepotByPostcode(ship?.zip),
         trackingNumber: "",
         consignmentNumber: String(order.order_number),
 
-        CustomerAccountNumber: "indi001", // FIXED - must match support example
+        CustomerAccountNumber: "indi001",
 
         datesAndTimes: [
           {
             dateTimeType: "COLD",
-            value: order.created_at.substring(0, 10).replace(/-/g, ""), // YYYYMMDD
+            value: order.created_at.substring(0, 10).replace(/-/g, ""),
           },
         ],
 
@@ -72,13 +109,9 @@ function convertOrderToPF(order) {
         ],
 
         palletSpaces: "1",
+        weight: String(order.total_weight || 950),
 
-        // Minimum pallet weight must be 950 (Palletforce rule)
-        weight: "950",
-
-        // MUST BE ONLY ONE SERVICE
         serviceName: "A",
-
         surcharges: "",
         customersUniqueReference: String(order.order_number),
         customersUniqueReference2: "",
@@ -91,11 +124,6 @@ function convertOrderToPF(order) {
         ],
 
         insuranceCode: "05",
-        customerCharge: "",
-        nonPalletforceConsignment: "",
-        deliveryVehicleCode: "",
-        consignmentType: "",
-        hubIdentifyingCode: "",
 
         notifications: [
           {
@@ -106,7 +134,6 @@ function convertOrderToPF(order) {
 
         cartonCount: "",
         aSNFBABOLReferenceNumber: "",
-
         additionalDetails: {
           lines: [
             {
@@ -119,19 +146,21 @@ function convertOrderToPF(order) {
             },
           ],
         },
-
-        // DO NOT SEND acceptedStatus → Palletforce blocks it
       },
     ],
   };
 }
 
+/**
+ * Handle Shopify Webhook
+ */
 app.post("/webhooks/order-paid", async (req, res) => {
   try {
-    console.log("📦 Webhook received", req.body.order_number);
-
     const order = req.body;
-    const payload = convertOrderToPF(order);
+
+    console.log("📦 Webhook received", order.order_number);
+
+    const payload = convertOrderToPalletforce(order);
 
     console.log("📤 Sending:", JSON.stringify(payload, null, 2));
 
@@ -142,12 +171,16 @@ app.post("/webhooks/order-paid", async (req, res) => {
     );
 
     console.log("🚚 PF Response:", response.data);
+
     res.status(200).send("OK");
   } catch (err) {
-    console.error("🔥 ERROR:", err.response?.data || err.message);
+    console.error("🔥 Palletforce Error:", err.response?.data || err);
     res.status(500).send("ERROR");
   }
 });
 
+/**
+ * Start Server
+ */
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log("🚀 Running on", PORT));
