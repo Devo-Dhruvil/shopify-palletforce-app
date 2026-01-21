@@ -96,7 +96,7 @@ function convertOrderToPalletforce(order) {
 
         notifications: [
           {
-            notificationType: "email",
+            notificationType: "EMAIL",
             value: order.email
           }
         ],
