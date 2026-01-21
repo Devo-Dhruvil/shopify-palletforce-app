@@ -1,26 +1,25 @@
-require("dotenv").config();
 const express = require("express");
 const crypto = require("crypto");
 const axios = require("axios");
+require("dotenv").config();
 
 const app = express();
 
-// Capture raw body (Shopify requirement)
+// Shopify raw body parser (required for signature verification)
 app.use(
   express.json({
     verify: (req, res, buf) => {
       req.rawBody = buf;
-    }
+    },
   })
 );
 
 // Convert Shopify → Palletforce JSON
-function convertOrderToPalletforce(order) {
+function convertOrderToPF(order) {
   const shipping = order.shipping_address || {};
 
   return {
     accessKey: process.env.PF_ACCESS_KEY,
-
     uniqueTransactionNumber: `SHOPIFY-${order.order_number}`,
 
     collectionAddress: {
@@ -32,51 +31,54 @@ function convertOrderToPalletforce(order) {
       postcode: "PE11 1EJ",
       countryCode: "GB",
       phoneNumber: "01775347904",
-      contactName: "Warehouse Team"
-    }, 
-    
-deliveryAddress: {
-  name: order.shipping_address?.name || "",
-  streetAddress: order.shipping_address?.address1 || "",
-  location: order.shipping_address?.address2 || "",
-  town: order.shipping_address?.city || "",
-  county: order.shipping_address?.province || "",
-  postcode: order.shipping_address?.zip || "",
-  countryCode: order.shipping_address?.country_code || "GB",
-  phoneNumber: order.shipping_address?.phone || "",
-  contactName: order.shipping_address?.name || ""
-},
+      contactName: "Warehouse Team",
+    },
 
+    deliveryAddress: {
+      name: shipping.name || "",
+      streetAddress: shipping.address1 || "",
+      location: shipping.address2 || "",
+      town: shipping.city || "",
+      county: shipping.province || "",
+      postcode: shipping.zip || "",
+      countryCode: shipping.country_code || "GB",
+      phoneNumber: shipping.phone || "",
+      contactName: shipping.name || "",
+    },
 
     consignments: [
       {
         requestingDepot: "121",
         collectingDepot: "",
         deliveryDepot: "",
-        trackingNumber: "",
 
+        trackingNumber: "",
         consignmentNumber: String(order.order_number),
 
-        // IMPORTANT: PF confirmed space in account number
-        CustomerAccountNumber: "indi001",
+        CustomerAccountNumber: "indi001", // FIXED - must match support example
 
         datesAndTimes: [
           {
             dateTimeType: "COLD",
-            value: order.created_at.substring(0, 10).replace(/-/g, "")
-          }
+            value: order.created_at.substring(0, 10).replace(/-/g, ""), // YYYYMMDD
+          },
         ],
 
         pallets: [
           {
             palletType: "H",
-            numberofPallets: "1"
-          }
+            numberofPallets: "1",
+          },
         ],
 
         palletSpaces: "1",
-        weight: String(Math.ceil((order.total_weight || 10000) / 1000)),
+
+        // Minimum pallet weight must be 950 (Palletforce rule)
+        weight: "950",
+
+        // MUST BE ONLY ONE SERVICE
         serviceName: "A",
+
         surcharges: "",
         customersUniqueReference: String(order.order_number),
         customersUniqueReference2: "",
@@ -84,8 +86,8 @@ deliveryAddress: {
         notes: [
           {
             noteName: "",
-            value: ""
-          }
+            value: "",
+          },
         ],
 
         insuranceCode: "05",
@@ -98,8 +100,8 @@ deliveryAddress: {
         notifications: [
           {
             notificationType: "email",
-            value: order.email
-          }
+            value: order.email,
+          },
         ],
 
         cartonCount: "",
@@ -111,16 +113,16 @@ deliveryAddress: {
               fields: [
                 {
                   fieldName: "",
-                  value: ""
-                }
-              ]
-            }
-          ]
+                  value: "",
+                },
+              ],
+            },
+          ],
         },
 
-        acceptedStatus: "N"
-      }
-    ]
+        // DO NOT SEND acceptedStatus → Palletforce blocks it
+      },
+    ],
   };
 }
 
@@ -129,7 +131,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
     console.log("📦 Webhook received", req.body.order_number);
 
     const order = req.body;
-    const payload = convertOrderToPalletforce(order);
+    const payload = convertOrderToPF(order);
 
     console.log("📤 Sending:", JSON.stringify(payload, null, 2));
 
@@ -140,52 +142,10 @@ app.post("/webhooks/order-paid", async (req, res) => {
     );
 
     console.log("🚚 PF Response:", response.data);
-
     res.status(200).send("OK");
-  } catch (error) {
-    console.log("🔥 FULL PF ERROR RAW ↓↓↓");
-
-    // Print entire error object
-    console.log(
-      "🔥 ERROR OBJECT ↓↓↓",
-      JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
-    );
-
-    // Print PF response
-    if (error.response) {
-      console.log(
-        "🔥 ERROR RESPONSE ↓↓↓",
-        JSON.stringify(error.response, Object.getOwnPropertyNames(error.response), 2)
-      );
-    }
-
-    if (error.response?.data) {
-      console.log(
-        "🔥 ERROR RESPONSE DATA ↓↓↓",
-        JSON.stringify(error.response.data, Object.getOwnPropertyNames(error.response.data), 2)
-      );
-    }
-
-    // Print failed consignments fully
-    if (error.response?.data?.failedConsignments) {
-      console.log(
-        "🔥 FAILED CONSIGNMENTS FULL ↓↓↓",
-        JSON.stringify(error.response.data.failedConsignments, null, 2)
-      );
-    }
-
-    // 🔥 MOST IMPORTANT — PRINT failureReasons as String (Render cannot collapse this)
-    if (
-      error.response?.data?.failedConsignments &&
-      error.response.data.failedConsignments.length > 0
-    ) {
-      console.log(
-        "🔥 FAILURE REASONS STRING ↓↓↓",
-        String(error.response.data.failedConsignments[0].failureReasons)
-      );
-    }
-
-    return res.status(500).send("ERROR");
+  } catch (err) {
+    console.error("🔥 ERROR:", err.response?.data || err.message);
+    res.status(500).send("ERROR");
   }
 });
 
