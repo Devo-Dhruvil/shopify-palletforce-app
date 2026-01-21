@@ -31,18 +31,18 @@ function convertOrder(order) {
       contactName: "Warehouse Team",
     },
 
-    deliveryAddress: {
-      name: order.shipping_address?.name || "",
-      streetAddress:
-        `${order.shipping_address?.address1 || ""} ${order.shipping_address?.address2 || ""}`.trim(),
-      location: "",
-      town: order.shipping_address?.city || "",
-      county: order.shipping_address?.province || "",
-      postcode: order.shipping_address?.zip || "",
-      countryCode: "GB",
-      phoneNumber: order.shipping_address?.phone || "00000000000", // REQUIRED
-      contactName: order.shipping_address?.name || "",
-    },
+deliveryAddress: {
+  name: order.shipping_address?.name || "",
+  streetAddress: `${order.shipping_address?.address1 || ""} ${order.shipping_address?.address2 || ""}`.trim(),
+  location: "",
+  town: order.shipping_address?.city || "",
+  county: order.shipping_address?.province || "",
+  postcode: order.shipping_address?.zip || "",
+  countryCode: "GB",
+  phoneNumber: order.shipping_address?.phone || "01775347904",   // ✅ FIXED
+  contactName: order.shipping_address?.name || ""
+},
+
 
     consignments: [
       {
