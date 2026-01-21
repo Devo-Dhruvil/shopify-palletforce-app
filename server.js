@@ -1,15 +1,9 @@
-/**
- * FINAL WORKING PALLETFORCE INTEGRATION (AUTO DEPOT ROUTING)
- */
-
 require("dotenv").config();
 const express = require("express");
-const crypto = require("crypto");
 const axios = require("axios");
-
 const app = express();
 
-// Keep raw body for Shopify webhook validation
+// Receive raw body for Shopify (if needed later)
 app.use(
   express.json({
     verify: (req, res, buf) => {
@@ -18,45 +12,10 @@ app.use(
   })
 );
 
-// OPTIONAL – skip validation during testing
-function verifyShopifyWebhook(req) {
-  const hmac = req.headers["x-shopify-hmac-sha256"];
-  const digest = crypto
-    .createHmac("sha256", process.env.SHOPIFY_WEBHOOK_SECRET)
-    .update(req.rawBody)
-    .digest("base64");
-
-  return digest === hmac;
-}
-
-/**
- * AUTO DEPOT MAPPING (VERY IMPORTANT)
- * Add more depot codes if needed
- */
-function getDepotByPostcode(postcode) {
-  if (!postcode) return "";
-
-  const area = postcode.substring(0, 2).toUpperCase();
-
-  const depotMap = {
-    "PE": "121", // Peterborough
-    "WF": "078", // West Yorkshire
-    "NG": "003", // Nottingham
-    "LE": "009"  // Leicester
-    // Add more if Palletforce gives you the full routing list
-  };
-
-  return depotMap[area] || "";
-}
-
-/**
- * Convert Shopify → Palletforce JSON
- */
-function convertOrderToPalletforce(order) {
-  const ship = order.shipping_address;
-
+// Convert Shopify order → Palletforce payload
+function convertToPalletforce(order) {
   return {
-    accessKey: process.env.PF_ACCESS_KEY,
+    accessKey: process.env.PF_ACCESS_KEY || "6O3tb+LpAM",
 
     uniqueTransactionNumber: `SHOPIFY-${order.order_number}`,
 
@@ -73,25 +32,28 @@ function convertOrderToPalletforce(order) {
     },
 
     deliveryAddress: {
-      name: ship?.name || "",
-      streetAddress: ship?.address1 || "",
-      location: ship?.address2 || "",
-      town: ship?.city || "",
-      county: ship?.province || "",
-      postcode: ship?.zip || "",
-      countryCode: ship?.country_code || "GB",
-      phoneNumber: ship?.phone || "",
-      contactName: ship?.name || "",
+      name: order.shipping_address?.name || "",
+      streetAddress:
+        `${order.shipping_address?.address1 || ""} ${order.shipping_address?.address2 || ""}`.trim(),
+      location: "",
+      town: order.shipping_address?.city || "",
+      county: order.shipping_address?.province || "",
+      postcode: order.shipping_address?.zip || "",
+      countryCode: order.shipping_address?.country_code || "GB",
+      phoneNumber: order.shipping_address?.phone || "",
+      contactName: order.shipping_address?.name || "",
     },
 
     consignments: [
       {
         requestingDepot: "121",
         collectingDepot: "",
-        deliveryDepot: getDepotByPostcode(ship?.zip),
+        deliveryDepot: "",
+
         trackingNumber: "",
         consignmentNumber: String(order.order_number),
 
+        // MOST IMPORTANT LINE (FIXED)
         CustomerAccountNumber: "indi001",
 
         datesAndTimes: [
@@ -109,6 +71,8 @@ function convertOrderToPalletforce(order) {
         ],
 
         palletSpaces: "1",
+
+        // If Shopify weight not available → default 950
         weight: String(order.total_weight || 950),
 
         serviceName: "A",
@@ -125,6 +89,7 @@ function convertOrderToPalletforce(order) {
 
         insuranceCode: "05",
 
+        // Notification must use lowercase "email"
         notifications: [
           {
             notificationType: "email",
@@ -134,6 +99,7 @@ function convertOrderToPalletforce(order) {
 
         cartonCount: "",
         aSNFBABOLReferenceNumber: "",
+
         additionalDetails: {
           lines: [
             {
@@ -151,16 +117,14 @@ function convertOrderToPalletforce(order) {
   };
 }
 
-/**
- * Handle Shopify Webhook
- */
+// MAIN WEBHOOK ENDPOINT
 app.post("/webhooks/order-paid", async (req, res) => {
   try {
     const order = req.body;
 
-    console.log("📦 Webhook received", order.order_number);
+    console.log(`📦 Webhook received ${order.order_number}`);
 
-    const payload = convertOrderToPalletforce(order);
+    const payload = convertToPalletforce(order);
 
     console.log("📤 Sending:", JSON.stringify(payload, null, 2));
 
@@ -174,13 +138,13 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
     res.status(200).send("OK");
   } catch (err) {
-    console.error("🔥 Palletforce Error:", err.response?.data || err);
+    console.error("🔥 ERROR:", err.response?.data || err.message);
     res.status(500).send("ERROR");
   }
 });
 
-/**
- * Start Server
- */
+// START SERVER
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log("🚀 Running on", PORT));
+app.listen(PORT, () => {
+  console.log("🚀 Running on", PORT);
+});
