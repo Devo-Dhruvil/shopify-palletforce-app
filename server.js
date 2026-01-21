@@ -36,7 +36,7 @@ deliveryAddress: {
   streetAddress: `${order.shipping_address?.address1 || ""} ${order.shipping_address?.address2 || ""}`.trim(),
   location: "",
   town: order.shipping_address?.city || "",
-  county: order.shipping_address?.province || "",
+  county: "",
   postcode: order.shipping_address?.zip || "",
   countryCode: "GB",
   phoneNumber: order.shipping_address?.phone || "01775347904",   // ✅ FIXED
