@@ -48,7 +48,7 @@
       "insuranceCode": "05",
       "notifications": [
         {
-          "notificationType": "EMAIL",
+          "notificationType": "email",
           "value": "customer@example.com"
         }
       ],
