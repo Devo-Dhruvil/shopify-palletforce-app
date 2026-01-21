@@ -35,17 +35,18 @@ function convertOrderToPalletforce(order) {
       contactName: "Warehouse Team"
     },
 
-    deliveryAddress: {
-      name: shipping.name || "",
-      streetAddress: shipping.address1 || "",
-      location: shipping.address2 || "",
-      town: shipping.city || "",
-      county: shipping.province || "",
-      postcode: shipping.zip || "",
-      countryCode: shipping.country_code || "GB",
-      phoneNumber: shipping.phone || "",
-      contactName: shipping.name || ""
-    },
+ deliveryAddress: {
+    name: order.shipping_address.name,
+    streetAddress: order.shipping_address.address1,
+    location: order.shipping_address.address2 || "",
+    town: order.shipping_address.city,
+    county: order.shipping_address.province || "",
+    postcode: order.shipping_address.zip,
+    countryCode: order.shipping_address.country_code || "GB",
+    phoneNumber: order.shipping_address.phone || "",
+    contactName: order.shipping_address.name
+},
+
 
     consignments: [
       {
