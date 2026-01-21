@@ -57,7 +57,7 @@ function convertOrderToPalletforce(order) {
         consignmentNumber: String(order.order_number),
 
         // IMPORTANT: PF confirmed space in account number
-        CustomerAccountNumber: "indi 001",
+        CustomerAccountNumber: "indi001",
 
         datesAndTimes: [
           {
