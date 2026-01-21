@@ -1,9 +1,11 @@
-require("dotenv").config();
 const express = require("express");
+const crypto = require("crypto");
 const axios = require("axios");
+require("dotenv").config();
+
 const app = express();
 
-// Receive raw body for Shopify (if needed later)
+// Shopify raw body parser (required for signature verification)
 app.use(
   express.json({
     verify: (req, res, buf) => {
@@ -12,11 +14,12 @@ app.use(
   })
 );
 
-// Convert Shopify order → Palletforce payload
-function convertToPalletforce(order) {
-  return {
-    accessKey: process.env.PF_ACCESS_KEY || "6O3tb+LpAM",
+// Convert Shopify → Palletforce JSON
+function convertOrderToPF(order) {
+  const shipping = order.shipping_address || {};
 
+  return {
+    accessKey: process.env.PF_ACCESS_KEY,
     uniqueTransactionNumber: `SHOPIFY-${order.order_number}`,
 
     collectionAddress: {
@@ -32,16 +35,15 @@ function convertToPalletforce(order) {
     },
 
     deliveryAddress: {
-      name: order.shipping_address?.name || "",
-      streetAddress:
-        `${order.shipping_address?.address1 || ""} ${order.shipping_address?.address2 || ""}`.trim(),
-      location: "",
-      town: order.shipping_address?.city || "",
-      county: order.shipping_address?.province || "",
-      postcode: order.shipping_address?.zip || "",
-      countryCode: order.shipping_address?.country_code || "GB",
-      phoneNumber: order.shipping_address?.phone || "",
-      contactName: order.shipping_address?.name || "",
+      name: shipping.name || "",
+      streetAddress: shipping.address1 || "",
+      location: shipping.address2 || "",
+      town: shipping.city || "",
+      county: shipping.province || "",
+      postcode: shipping.zip || "",
+      countryCode: shipping.country_code || "GB",
+      phoneNumber: shipping.phone || "",
+      contactName: shipping.name || "",
     },
 
     consignments: [
@@ -53,13 +55,12 @@ function convertToPalletforce(order) {
         trackingNumber: "",
         consignmentNumber: String(order.order_number),
 
-        // MOST IMPORTANT LINE (FIXED)
-        CustomerAccountNumber: "indi001",
+        CustomerAccountNumber: "indi001", // FIXED - must match support example
 
         datesAndTimes: [
           {
             dateTimeType: "COLD",
-            value: order.created_at.substring(0, 10).replace(/-/g, ""),
+            value: order.created_at.substring(0, 10).replace(/-/g, ""), // YYYYMMDD
           },
         ],
 
@@ -72,10 +73,12 @@ function convertToPalletforce(order) {
 
         palletSpaces: "1",
 
-        // If Shopify weight not available → default 950
-        weight: String(order.total_weight || 950),
+        // Minimum pallet weight must be 950 (Palletforce rule)
+        weight: "950",
 
+        // MUST BE ONLY ONE SERVICE
         serviceName: "A",
+
         surcharges: "",
         customersUniqueReference: String(order.order_number),
         customersUniqueReference2: "",
@@ -88,8 +91,12 @@ function convertToPalletforce(order) {
         ],
 
         insuranceCode: "05",
+        customerCharge: "",
+        nonPalletforceConsignment: "",
+        deliveryVehicleCode: "",
+        consignmentType: "",
+        hubIdentifyingCode: "",
 
-        // Notification must use lowercase "email"
         notifications: [
           {
             notificationType: "email",
@@ -112,19 +119,19 @@ function convertToPalletforce(order) {
             },
           ],
         },
+
+        // DO NOT SEND acceptedStatus → Palletforce blocks it
       },
     ],
   };
 }
 
-// MAIN WEBHOOK ENDPOINT
 app.post("/webhooks/order-paid", async (req, res) => {
   try {
+    console.log("📦 Webhook received", req.body.order_number);
+
     const order = req.body;
-
-    console.log(`📦 Webhook received ${order.order_number}`);
-
-    const payload = convertToPalletforce(order);
+    const payload = convertOrderToPF(order);
 
     console.log("📤 Sending:", JSON.stringify(payload, null, 2));
 
@@ -135,7 +142,6 @@ app.post("/webhooks/order-paid", async (req, res) => {
     );
 
     console.log("🚚 PF Response:", response.data);
-
     res.status(200).send("OK");
   } catch (err) {
     console.error("🔥 ERROR:", err.response?.data || err.message);
@@ -143,8 +149,5 @@ app.post("/webhooks/order-paid", async (req, res) => {
   }
 });
 
-// START SERVER
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log("🚀 Running on", PORT);
-});
+app.listen(PORT, () => console.log("🚀 Running on", PORT));
