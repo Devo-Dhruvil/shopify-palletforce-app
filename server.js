@@ -141,32 +141,34 @@ app.post("/webhooks/order-paid", async (req, res) => {
     console.log("🚚 PF Response:", response.data);
 
     res.status(200).send("OK");
-  }
-
-  catch (error) {
+  } catch (error) {
   console.log("🔥 FULL PALLETFORCE ERROR RAW ↓↓↓");
 
-  // 1. Print the entire error including nested objects
-  console.log(
-    "🔥 ERROR OBJECT:",
-    JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
-  );
+  // Print entire error including stack and hidden fields
+  console.log("🔥 ERROR OBJECT ↓↓↓");
+  console.log(JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
 
-  // 2. Print PF response data
-  if (error.response?.data) {
-    console.log("🔥 PF RESPONSE DATA ↓↓↓");
-    console.log(JSON.stringify(error.response.data, null, 2));
+  // Print PF response if available
+  if (error.response) {
+    console.log("🔥 ERROR RESPONSE ↓↓↓");
+    console.log(JSON.stringify(error.response, Object.getOwnPropertyNames(error.response), 2));
   }
 
-  // 3. Print failedConsignments full object
+  // Print PF response data
+  if (error.response?.data) {
+    console.log("🔥 ERROR RESPONSE DATA ↓↓↓");
+    console.log(JSON.stringify(error.response.data, Object.getOwnPropertyNames(error.response.data), 2));
+  }
+
+  // Print failed consignments fully
   if (error.response?.data?.failedConsignments) {
-    console.log("🔥 FAILED CONSIGNMENTS ↓↓↓");
+    console.log("🔥 FAILED CONSIGNMENTS FULL ↓↓↓");
     console.log(
-      JSON.stringify(error.response.data.failedConsignments, null, 2)
+      JSON.stringify(error.response.data.failedConsignments, Object.getOwnPropertyNames(error.response.data.failedConsignments), 2)
     );
   }
 
-  // 4. Print ONLY failure reasons clearly
+  // Print failure reasons directly
   if (
     error.response?.data?.failedConsignments &&
     error.response.data.failedConsignments.length > 0
