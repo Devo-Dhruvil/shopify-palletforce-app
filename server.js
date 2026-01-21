@@ -1,9 +1,11 @@
+require("dotenv").config();
 const express = require("express");
 const crypto = require("crypto");
 const axios = require("axios");
 
 const app = express();
 
+// Shopify raw body for verifying webhook
 app.use(
   express.json({
     verify: (req, res, buf) => {
@@ -13,7 +15,10 @@ app.use(
 );
 
 // Convert Shopify order → Palletforce JSON
-function convertOrder(order) {
+function convertOrderToPF(order) {
+  // Extract shipping address safely
+  const s = order.shipping_address || {};
+
   return {
     accessKey: process.env.PF_ACCESS_KEY,
 
@@ -31,24 +36,23 @@ function convertOrder(order) {
       contactName: "Warehouse Team",
     },
 
-deliveryAddress: {
-  name: order.shipping_address?.name || "",
-  streetAddress: `${order.shipping_address?.address1 || ""} ${order.shipping_address?.address2 || ""}`.trim(),
-  location: "",
-  town: order.shipping_address?.city || "",
-  county: "",
-  postcode: order.shipping_address?.zip || "",
-  countryCode: "GB",
-  phoneNumber: order.shipping_address?.phone || "01775347904",   // ✅ FIXED
-  contactName: order.shipping_address?.name || ""
-},
-
+    deliveryAddress: {
+      name: s.name || "",
+      streetAddress: s.address1 || "Unit 2 Courtyard 31",
+      location: s.address2 || "Industrial Estate",
+      town: s.city || "Normanton",
+      county: "",
+      postcode: s.zip || "",
+      countryCode: "GB",
+      phoneNumber: s.phone || "01775347904",
+      contactName: s.name || "",
+    },
 
     consignments: [
       {
         requestingDepot: "121",
         collectingDepot: "",
-        deliveryDepot: "074", // WF6 → Depot 074
+        deliveryDepot: "074",       // WF6 1JU → Depot 074
         trackingNumber: "",
         consignmentNumber: String(order.order_number),
         CustomerAccountNumber: "indi001",
@@ -68,9 +72,9 @@ deliveryAddress: {
         ],
 
         palletSpaces: "1",
-        weight: String(Math.ceil((order.total_weight || 10000) / 1000)), // safe fallback
-        serviceName: "A", // ONLY ONE SERVICE ALLOWED
+        weight: String(Math.ceil((order.total_weight || 950000) / 1000)),
 
+        serviceName: "A",
         surcharges: "",
         customersUniqueReference: String(order.order_number),
         customersUniqueReference2: "",
@@ -83,16 +87,17 @@ deliveryAddress: {
         ],
 
         insuranceCode: "05",
+
         customerCharge: "",
         nonPalletforceConsignment: "",
-        deliveryVehicleCode: "1", // REQUIRED
+        deliveryVehicleCode: "1",
         consignmentType: "",
-        hubIdentifyingCode: "WF", // WF = West Yorkshire hub
+        hubIdentifyingCode: "WF",    // WF postcode → WF hub
 
         notifications: [
           {
             notificationType: "email",
-            value: order.email,
+            value: order.email || "devodhruvil@gmail.com",
           },
         ],
 
@@ -115,29 +120,32 @@ deliveryAddress: {
   };
 }
 
+// Webhook endpoint
 app.post("/webhooks/order-paid", async (req, res) => {
   try {
     const order = req.body;
+
     console.log("📦 Webhook received", order.order_number);
 
-    const payload = convertOrder(order);
+    const pfPayload = convertOrderToPF(order);
 
-    console.log("📤 Sending:", JSON.stringify(payload, null, 2));
+    console.log("📤 Sending:", JSON.stringify(pfPayload, null, 2));
 
-    const pfRes = await axios.post(
+    const response = await axios.post(
       "https://apiuat.palletforce.net/api/ExternalScanning/UploadManifest",
-      payload,
+      pfPayload,
       { headers: { "Content-Type": "application/json" } }
     );
 
-    console.log("🚚 PF Response:", pfRes.data);
+    console.log("🚚 PF Response:", response.data);
 
     res.status(200).send("OK");
-  } catch (error) {
-    console.log("🔥 ERROR:", error.response?.data || error.message);
+  } catch (err) {
+    console.error("🔥 Palletforce ERROR:", err.response?.data || err.message);
     res.status(500).send("ERROR");
   }
 });
 
+// Start server
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Running on ${PORT}`));
+app.listen(PORT, () => console.log("🚀 Running on", PORT));
