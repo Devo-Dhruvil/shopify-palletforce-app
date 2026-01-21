@@ -5,7 +5,7 @@ const axios = require("axios");
 
 const app = express();
 
-// Capture raw body
+// Capture raw body (Shopify requirement)
 app.use(
   express.json({
     verify: (req, res, buf) => {
@@ -14,6 +14,7 @@ app.use(
   })
 );
 
+// Convert Shopify → Palletforce JSON
 function convertOrderToPalletforce(order) {
   const shipping = order.shipping_address || {};
 
@@ -48,14 +49,14 @@ function convertOrderToPalletforce(order) {
 
     consignments: [
       {
-        requestingDepot: "121",          // PF confirmed
-        collectingDepot: "",             // MUST BE EMPTY
-        deliveryDepot: "",               // MUST BE EMPTY
+        requestingDepot: "121",
+        collectingDepot: "",
+        deliveryDepot: "",
+        trackingNumber: "",
 
-        trackingNumber: "",              // PF requires empty
         consignmentNumber: String(order.order_number),
 
-        // PF confirmed account has a space
+        // IMPORTANT: PF confirmed space in account number
         CustomerAccountNumber: "indi 001",
 
         datesAndTimes: [
@@ -74,7 +75,6 @@ function convertOrderToPalletforce(order) {
 
         palletSpaces: "1",
         weight: String(Math.ceil((order.total_weight || 10000) / 1000)),
-
         serviceName: "A",
         surcharges: "",
         customersUniqueReference: String(order.order_number),
@@ -96,7 +96,7 @@ function convertOrderToPalletforce(order) {
 
         notifications: [
           {
-            notificationType: "email",       // PF uses lowercase email
+            notificationType: "email",
             value: order.email
           }
         ],
@@ -117,7 +117,7 @@ function convertOrderToPalletforce(order) {
           ]
         },
 
-        acceptedStatus: "N"   // PF requires this
+        acceptedStatus: "N"
       }
     ]
   };
@@ -142,52 +142,50 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
     res.status(200).send("OK");
   } catch (error) {
-  console.log("🔥 FULL PALLETFORCE ERROR RAW ↓↓↓");
+    console.log("🔥 FULL PF ERROR RAW ↓↓↓");
 
-  // Print entire error including stack and hidden fields
-  console.log("🔥 ERROR OBJECT ↓↓↓");
-  console.log(JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
-
-  // Print PF response if available
-  if (error.response) {
-    console.log("🔥 ERROR RESPONSE ↓↓↓");
-    console.log(JSON.stringify(error.response, Object.getOwnPropertyNames(error.response), 2));
-  }
-
-  // Print PF response data
-  if (error.response?.data) {
-    console.log("🔥 ERROR RESPONSE DATA ↓↓↓");
-    console.log(JSON.stringify(error.response.data, Object.getOwnPropertyNames(error.response.data), 2));
-  }
-
-  // Print failed consignments fully
-  if (error.response?.data?.failedConsignments) {
-    console.log("🔥 FAILED CONSIGNMENTS FULL ↓↓↓");
+    // Print entire error object
     console.log(
-      JSON.stringify(error.response.data.failedConsignments, Object.getOwnPropertyNames(error.response.data.failedConsignments), 2)
+      "🔥 ERROR OBJECT ↓↓↓",
+      JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
     );
+
+    // Print PF response
+    if (error.response) {
+      console.log(
+        "🔥 ERROR RESPONSE ↓↓↓",
+        JSON.stringify(error.response, Object.getOwnPropertyNames(error.response), 2)
+      );
+    }
+
+    if (error.response?.data) {
+      console.log(
+        "🔥 ERROR RESPONSE DATA ↓↓↓",
+        JSON.stringify(error.response.data, Object.getOwnPropertyNames(error.response.data), 2)
+      );
+    }
+
+    // Print failed consignments fully
+    if (error.response?.data?.failedConsignments) {
+      console.log(
+        "🔥 FAILED CONSIGNMENTS FULL ↓↓↓",
+        JSON.stringify(error.response.data.failedConsignments, null, 2)
+      );
+    }
+
+    // 🔥 MOST IMPORTANT — PRINT failureReasons as String (Render cannot collapse this)
+    if (
+      error.response?.data?.failedConsignments &&
+      error.response.data.failedConsignments.length > 0
+    ) {
+      console.log(
+        "🔥 FAILURE REASONS STRING ↓↓↓",
+        String(error.response.data.failedConsignments[0].failureReasons)
+      );
+    }
+
+    return res.status(500).send("ERROR");
   }
-
-  // Print failure reasons directly
-  if (
-    error.response?.data?.failedConsignments &&
-    error.response.data.failedConsignments.length > 0
-  ) {
-    console.log("🔥 FAILURE REASONS ↓↓↓");
-    console.log(
-      JSON.stringify(
-        error.response.data.failedConsignments[0].failureReasons,
-        null,
-        2
-      )
-    );
-  }
-
-  return res.status(500).send("ERROR");
-}
-
-  
-
 });
 
 const PORT = process.env.PORT || 10000;
