@@ -34,17 +34,19 @@ function convertOrderToPalletforce(order) {
       phoneNumber: "01775347904",
       contactName: "Warehouse Team"
     }, 
-    deliveryAddress: {
-  name: order.shipping_address.name,
-  streetAddress: order.shipping_address.address1,
-  location: order.shipping_address.address2 || "",
-  town: order.shipping_address.city,
-  county: order.shipping_address.province || "",
-  postcode: order.shipping_address.zip,
-  countryCode: order.shipping_address.country_code || "GB",
-  phoneNumber: order.shipping_address.phone || "",
-  contactName: order.shipping_address.name
+    
+deliveryAddress: {
+  name: order.shipping_address?.name || "",
+  streetAddress: order.shipping_address?.address1 || "",
+  location: order.shipping_address?.address2 || "",
+  town: order.shipping_address?.city || "",
+  county: order.shipping_address?.province || "",
+  postcode: order.shipping_address?.zip || "",
+  countryCode: order.shipping_address?.country_code || "GB",
+  phoneNumber: order.shipping_address?.phone || "",
+  contactName: order.shipping_address?.name || ""
 },
+
 
     consignments: [
       {
