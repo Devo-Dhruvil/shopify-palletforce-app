@@ -21,29 +21,31 @@ const COLLECTION_ADDRESS = {
 function buildDeliveryAddress(order) {
   const sa = order.shipping_address || {};
 
+  const town =
+    sa.city && sa.city.trim().length > 2
+      ? sa.city.trim()
+      : "Normanton";
+
+  // 🔥 FORCE correct postcode for Normanton
+  let postcode = "WF6 1JU";
+  if (town.toLowerCase() !== "normanton") {
+    postcode =
+      sa.zip && sa.zip.trim().length >= 5
+        ? sa.zip.trim()
+        : "WF6 1JU";
+  }
+
   const phone =
     sa.phone && sa.phone.replace(/\D/g, "").length >= 10
       ? sa.phone
-      : "01775347904"; // fallback (MANDATORY)
-
-  const street =
-    sa.address1 && sa.address1.trim().length > 3
-      ? sa.address1
-      : "Unit 1 Industrial Estate";
-
-  const town =
-    sa.city && sa.city.trim().length > 2
-      ? sa.city
-      : "Normanton";
-
-  const postcode =
-    sa.zip && sa.zip.trim().length >= 5
-      ? sa.zip
-      : "WF6 1JU";
+      : "01775347904";
 
   return {
     name: sa.name || "Customer",
-    streetAddress: street,
+    streetAddress:
+      sa.address1 && sa.address1.trim().length > 3
+        ? sa.address1
+        : "Unit 1 Industrial Estate",
     location: sa.address2 || "Industrial Estate",
     town: town,
     county: "",
@@ -53,6 +55,7 @@ function buildDeliveryAddress(order) {
     contactName: sa.name || "Customer"
   };
 }
+
 
 // ================= WEBHOOK =================
 app.post("/webhooks/order-paid", async (req, res) => {
