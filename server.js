@@ -96,7 +96,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
     // ✅ Palletforce endpoint (UPLOAD MANIFEST)
     const PF_URL =
-      "https://api.palletforce.com/CustomerManifest/UploadManifest";
+      "https://apiuat.palletforce.net/api/ExternalScanning/UploadManifest";
 
     const pfResponse = await axios.post(PF_URL, manifest, {
       headers: { "Content-Type": "application/json" }
