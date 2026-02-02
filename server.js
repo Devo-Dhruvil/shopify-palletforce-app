@@ -92,7 +92,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
           palletSpaces: "1",
 
           // weight must be reasonable (kg)
-          weight: "950",
+          weight: "500",
 
           serviceName: "A",
           surcharges: "",
