@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 10000;
 
 // 🔑 Palletforce endpoint (LIVE)
 const PALLETFORCE_URL =
-  "https://api.palletforce.com/CustomerManifest/UploadManifest";
+  "https://apiuat.palletforce.net/api/ExternalScanning/UploadManifest";
 
 const ACCESS_KEY = "6O3tb+LpAM";
 
@@ -108,9 +108,17 @@ app.post("/webhook", async (req, res) => {
 
     console.log("📤 Sending Manifest:\n", JSON.stringify(manifest, null, 2));
 
-    const response = await axios.post(PALLETFORCE_URL, manifest, {
-      headers: { "Content-Type": "application/json" }
-    });
+    const response = await axios.post(
+  PALLETFORCE_URL,
+  manifest,
+  {
+    headers: {
+      "Content-Type": "application/json"
+    },
+    timeout: 30000
+  }
+);
+
 
     console.log("🚚 Palletforce Response:", response.data);
 
