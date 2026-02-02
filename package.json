@@ -1,13 +1,13 @@
 {
   "name": "shopify-palletforce-app",
   "version": "1.0.0",
-  "type": "module",
+  "description": "Shopify → Palletforce Manifest API",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "node-fetch": "^3.3.2"
+    "axios": "^1.6.8",
+    "express": "^4.19.2"
   }
 }
