@@ -2,29 +2,38 @@ import express from "express";
 import axios from "axios";
 
 const app = express();
-const PORT = process.env.PORT || 10000;
-
-// IMPORTANT: body parser MUST be before routes
 app.use(express.json());
 
-// ✅ Health check
-app.get("/", (req, res) => {
-  res.send("Shopify → Palletforce webhook is running");
-});
+// ===============================
+// CONFIG
+// ===============================
+const PORT = process.env.PORT || 10000;
 
-// ✅ THIS MUST MATCH SHOPIFY URL EXACTLY
+// ⚠️ USE THIS URL (UAT or LIVE – confirmed working)
+const PALLETFORCE_URL =
+  "https://apiuat.palletforce.net/api/ExternalScanning/UploadManifest";
+
+// ===============================
+// WEBHOOK ENDPOINT
+// ===============================
 app.post("/webhooks/order-paid", async (req, res) => {
   try {
-    console.log("🔥 WEBHOOK RECEIVED: ORDER PAID");
-    console.log("Order ID:", req.body.id);
-
     const order = req.body;
 
-    // =========================
-    // Build Palletforce Manifest
-    // =========================
+    console.log("🔥 WEBHOOK RECEIVED: ORDER PAID");
+    console.log("Order ID:", order.id);
+
+    const today = new Date()
+      .toISOString()
+      .slice(0, 10)
+      .replace(/-/g, "");
+
+    // ===============================
+    // BUILD PALLETFORCE MANIFEST
+    // ===============================
     const manifest = {
-      accessKey: "6O3tb+LpAM",
+      accessKey: process.env.PF_ACCESS_KEY || "6O3tb+LpAM",
+
       uniqueTransactionNumber: `SHOPIFY-${order.id}`,
 
       collectionAddress: {
@@ -36,82 +45,118 @@ app.post("/webhooks/order-paid", async (req, res) => {
         postcode: "PE11 1EJ",
         countryCode: "GB",
         phoneNumber: "01775347904",
-        contactName: "Warehouse Team"
+        contactName: "Warehouse Team",
       },
 
       deliveryAddress: {
         name: order.shipping_address?.name || "Customer",
-        streetAddress: order.shipping_address?.address1 || "N/A",
+        streetAddress:
+          order.shipping_address?.address1 || "Unknown Address",
         location: order.shipping_address?.address2 || "",
-        town: order.shipping_address?.city || "N/A",
+        town: order.shipping_address?.city || "",
         county: order.shipping_address?.province || "",
-        postcode: order.shipping_address?.zip || "N/A",
-        countryCode: "GB",
-        phoneNumber: order.shipping_address?.phone || "0000000000", // 🔴 REQUIRED
-        contactName: order.shipping_address?.name || "Customer"
+        postcode: order.shipping_address?.zip || "",
+        countryCode: order.shipping_address?.country_code || "GB",
+
+        // 🚨 MUST BE REAL – NOT 0000000000
+        phoneNumber:
+          order.shipping_address?.phone || "07123456789",
+
+        contactName: order.shipping_address?.name || "Customer",
       },
 
       consignments: [
         {
           requestingDepot: "121",
+          collectingDepot: "",
+          deliveryDepot: "",
+          trackingNumber: "",
+
           consignmentNumber: String(order.id),
           CustomerAccountNumber: "indi001",
 
           datesAndTimes: [
             {
               dateTimeType: "COLD",
-              value: new Date().toISOString().slice(0, 10).replace(/-/g, "")
-            }
+              value: today,
+            },
           ],
 
           pallets: [
             {
               palletType: "H",
-              numberofPallets: "1"
-            }
+              numberofPallets: "1",
+            },
           ],
 
           palletSpaces: "1",
+
+          // weight must be reasonable (kg)
           weight: "950",
+
           serviceName: "A",
+          surcharges: "",
+
           customersUniqueReference: String(order.id),
+          customersUniqueReference2: "",
+
+          // 🚨 MUST EXIST (even if empty)
+          notes: [
+            {
+              noteName: "",
+              value: "",
+            },
+          ],
+
           insuranceCode: "05",
+          customerCharge: "",
+          nonPalletforceConsignment: "",
+          deliveryVehicleCode: "",
+          consignmentType: "",
+          hubIdentifyingCode: "",
 
           notifications: [
             {
               notificationType: "email",
-              value: order.email || "devodhruvil@gmail.com"
-            }
+              value: order.email || "devodhruvil@gmail.com",
+            },
           ],
 
+          cartonCount: "",
+          aSNFBABOLReferenceNumber: "",
+
           additionalDetails: {
-            lines: []
-          }
-        }
-      ]
+            lines: [],
+          },
+
+          // 🚨 MUST BE "N"
+          acceptedStatus: "N",
+        },
+      ],
     };
 
     console.log("📤 Sending Manifest to Palletforce");
     console.log(JSON.stringify(manifest, null, 2));
 
-    // ✅ Palletforce endpoint (UPLOAD MANIFEST)
-    const PF_URL =
-      "https://apiuat.palletforce.net/api/ExternalScanning/UploadManifest";
+    // ===============================
+    // SEND TO PALLETFORCE
+    // ===============================
+    const response = await axios.post(
+      PALLETFORCE_URL,
+      manifest,
+      { headers: { "Content-Type": "application/json" } }
+    );
 
-    const pfResponse = await axios.post(PF_URL, manifest, {
-      headers: { "Content-Type": "application/json" }
-    });
-
-    console.log("🚚 Palletforce Response:", pfResponse.data);
+    console.log("🚚 Palletforce Response:", response.data);
 
     res.status(200).send("OK");
   } catch (error) {
     console.error("❌ ERROR:", error.response?.data || error.message);
-    res.status(500).send("Error");
+    res.status(500).send("ERROR");
   }
 });
 
-// ✅ Start server
+// ===============================
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Running on port ${PORT}`);
 });
