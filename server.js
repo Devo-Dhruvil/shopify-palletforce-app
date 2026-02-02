@@ -4,7 +4,7 @@ import fetch from "node-fetch";
 const app = express();
 app.use(express.json());
 
-// ================= COLLECTION ADDRESS =================
+// ================= FIXED COLLECTION ADDRESS =================
 const COLLECTION_ADDRESS = {
   name: "Indistone Ltd",
   streetAddress: "Unit 2, Courtyard 31",
@@ -17,18 +17,40 @@ const COLLECTION_ADDRESS = {
   contactName: "Warehouse Team"
 };
 
-// ================= DELIVERY ADDRESS =================
+// ================= SAFE DELIVERY ADDRESS BUILDER =================
 function buildDeliveryAddress(order) {
+  const sa = order.shipping_address || {};
+
+  const phone =
+    sa.phone && sa.phone.replace(/\D/g, "").length >= 10
+      ? sa.phone
+      : "01775347904"; // fallback (MANDATORY)
+
+  const street =
+    sa.address1 && sa.address1.trim().length > 3
+      ? sa.address1
+      : "Unit 1 Industrial Estate";
+
+  const town =
+    sa.city && sa.city.trim().length > 2
+      ? sa.city
+      : "Normanton";
+
+  const postcode =
+    sa.zip && sa.zip.trim().length >= 5
+      ? sa.zip
+      : "WF6 1JU";
+
   return {
-    name: order.shipping_address?.name || "Customer",
-    streetAddress: order.shipping_address?.address1 || "Street",
-    location: order.shipping_address?.address2 || "",
-    town: order.shipping_address?.city || "",
-    county: order.shipping_address?.province || "",
-    postcode: order.shipping_address?.zip || "",
-    countryCode: order.shipping_address?.country_code || "GB",
-    phoneNumber: order.shipping_address?.phone || "0000000000",
-    contactName: order.shipping_address?.name || "Customer"
+    name: sa.name || "Customer",
+    streetAddress: street,
+    location: sa.address2 || "Industrial Estate",
+    town: town,
+    county: "",
+    postcode: postcode,
+    countryCode: "GB",
+    phoneNumber: phone,
+    contactName: sa.name || "Customer"
   };
 }
 
@@ -40,7 +62,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
     console.log("📦 Webhook received", orderNumber);
 
-    // ================= MANIFEST PAYLOAD (STRICT) =================
+    // ================= PALLETFORCE MANIFEST (STRICT) =================
     const payload = {
       accessKey: "6O3tb+LpAM",
       uniqueTransactionNumber: `SHOPIFY-${orderNumber}`,
@@ -71,18 +93,17 @@ app.post("/webhooks/order-paid", async (req, res) => {
           ],
 
           palletSpaces: "1",
-          weight: String(Math.max(1, Math.ceil((order.total_weight || 950) / 1000))),
+          weight: "950",
           serviceName: "A",
 
           customersUniqueReference: String(orderNumber),
-
           notes: [],
           insuranceCode: "05",
 
           notifications: [
             {
               notificationType: "email",
-              value: order.email || "test@example.com"
+              value: order.email || "devodhruvil@gmail.com"
             }
           ],
 
@@ -108,8 +129,8 @@ app.post("/webhooks/order-paid", async (req, res) => {
     console.log("🚚 Palletforce Response:", data);
 
     res.status(200).send("OK");
-  } catch (err) {
-    console.error("🔥 Error:", err);
+  } catch (error) {
+    console.error("🔥 ERROR:", error);
     res.status(500).send("ERROR");
   }
 });
