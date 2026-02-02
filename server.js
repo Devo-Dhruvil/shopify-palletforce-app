@@ -1,90 +1,75 @@
 import express from "express";
-import fetch from "node-fetch";
+import axios from "axios";
 
 const app = express();
 app.use(express.json());
 
-// ================= FIXED COLLECTION ADDRESS =================
-const COLLECTION_ADDRESS = {
-  name: "Indistone Ltd",
-  streetAddress: "Unit 2, Courtyard 31",
-  location: "Normanton Industrial Estate",
-  town: "Peterborough",
-  county: "",
-  postcode: "PE11 1EJ",
-  countryCode: "GB",
-  phoneNumber: "01775347904",
-  contactName: "Warehouse Team"
-};
+const PORT = process.env.PORT || 10000;
 
-// ================= SAFE DELIVERY ADDRESS BUILDER =================
-function buildDeliveryAddress(order) {
-  const sa = order.shipping_address || {};
+// 🔑 Palletforce endpoint (LIVE)
+const PALLETFORCE_URL =
+  "https://api.palletforce.com/CustomerManifest/UploadManifest";
 
-  const town =
-    sa.city && sa.city.trim().length > 2
-      ? sa.city.trim()
-      : "Normanton";
+const ACCESS_KEY = "6O3tb+LpAM";
 
-  // 🔥 FORCE correct postcode for Normanton
-  let postcode = "WF6 1JU";
-  if (town.toLowerCase() !== "normanton") {
-    postcode =
-      sa.zip && sa.zip.trim().length >= 5
-        ? sa.zip.trim()
-        : "WF6 1JU";
-  }
+// Health check
+app.get("/", (_, res) => {
+  res.send("✅ Palletforce Manifest Service Running");
+});
 
-  const phone =
-    sa.phone && sa.phone.replace(/\D/g, "").length >= 10
-      ? sa.phone
-      : "01775347904";
-
-  return {
-    name: sa.name || "Customer",
-    streetAddress:
-      sa.address1 && sa.address1.trim().length > 3
-        ? sa.address1
-        : "Unit 1 Industrial Estate",
-    location: sa.address2 || "Industrial Estate",
-    town: town,
-    county: "",
-    postcode: postcode,
-    countryCode: "GB",
-    phoneNumber: phone,
-    contactName: sa.name || "Customer"
-  };
-}
-
-
-// ================= WEBHOOK =================
-app.post("/webhooks/order-paid", async (req, res) => {
+app.post("/webhook", async (req, res) => {
   try {
     const order = req.body;
-    const orderNumber = order.order_number || Date.now();
+    const orderId = order.id;
 
-    console.log("📦 Webhook received", orderNumber);
+    console.log("📦 Webhook received", orderId);
 
-    // ================= PALLETFORCE MANIFEST (STRICT) =================
-    const payload = {
-      accessKey: "6O3tb+LpAM",
-      uniqueTransactionNumber: `SHOPIFY-${orderNumber}`,
+    // ---- SAFE DELIVERY PHONE (MANDATORY) ----
+    const deliveryPhone =
+      order.shipping_address?.phone ||
+      order.customer?.phone ||
+      "01775347904"; // fallback REQUIRED
 
-      collectionAddress: COLLECTION_ADDRESS,
-      deliveryAddress: buildDeliveryAddress(order),
+    // ---- BUILD MANIFEST (STRICTLY PER SPEC) ----
+    const manifest = {
+      accessKey: ACCESS_KEY,
+      uniqueTransactionNumber: `SHOPIFY-${orderId}`,
+
+      collectionAddress: {
+        name: "Indistone Ltd",
+        streetAddress: "Unit 2, Courtyard 31",
+        location: "Normanton Industrial Estate",
+        town: "Peterborough",
+        county: "",
+        postcode: "PE11 1EJ",
+        countryCode: "GB",
+        phoneNumber: "01775347904",
+        contactName: "Warehouse Team"
+      },
+
+      deliveryAddress: {
+        name: order.shipping_address?.name || "Customer",
+        streetAddress:
+          order.shipping_address?.address1 || "Unknown Street",
+        location: order.shipping_address?.address2 || "",
+        town: order.shipping_address?.city || "Unknown",
+        county: order.shipping_address?.province || "",
+        postcode: order.shipping_address?.zip || "UNKNOWN",
+        countryCode: "GB",
+        phoneNumber: deliveryPhone,
+        contactName: order.shipping_address?.name || "Customer"
+      },
 
       consignments: [
         {
           requestingDepot: "121",
-          consignmentNumber: String(orderNumber),
+          consignmentNumber: String(orderId),
           CustomerAccountNumber: "indi001",
 
           datesAndTimes: [
             {
               dateTimeType: "COLD",
-              value: order.created_at
-                .substring(0, 10)
-                .replace(/-/g, "")
+              value: new Date().toISOString().slice(0, 10).replace(/-/g, "")
             }
           ],
 
@@ -96,16 +81,20 @@ app.post("/webhooks/order-paid", async (req, res) => {
           ],
 
           palletSpaces: "1",
+
+          // ⚠️ MAX 4 DIGITS (KG)
           weight: "950",
+
+          // ✅ EXACTLY ONE SERVICE
           serviceName: "A",
 
-          customersUniqueReference: String(orderNumber),
-          notes: [],
+          customersUniqueReference: String(orderId),
+
           insuranceCode: "05",
 
           notifications: [
             {
-              notificationType: "email",
+              notificationType: "EMAIL",
               value: order.email || "devodhruvil@gmail.com"
             }
           ],
@@ -117,29 +106,26 @@ app.post("/webhooks/order-paid", async (req, res) => {
       ]
     };
 
-    console.log("📤 Sending Manifest:\n", JSON.stringify(payload, null, 2));
+    console.log("📤 Sending Manifest:\n", JSON.stringify(manifest, null, 2));
 
-    const response = await fetch(
-      "https://apiuat.palletforce.net/api/ExternalScanning/UploadManifest",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      }
-    );
+    const response = await axios.post(PALLETFORCE_URL, manifest, {
+      headers: { "Content-Type": "application/json" }
+    });
 
-    const data = await response.json();
-    console.log("🚚 Palletforce Response:", data);
+    console.log("🚚 Palletforce Response:", response.data);
 
-    res.status(200).send("OK");
-  } catch (error) {
-    console.error("🔥 ERROR:", error);
-    res.status(500).send("ERROR");
+    res.status(200).json({
+      ok: true,
+      palletforce: response.data
+    });
+  } catch (err) {
+    console.error("❌ Palletforce Error:", err?.response?.data || err.message);
+    res.status(500).json({
+      error: err?.response?.data || err.message
+    });
   }
 });
 
-// ================= START SERVER =================
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () =>
-  console.log(`🚀 Server running on port ${PORT}`)
-);
+app.listen(PORT, () => {
+  console.log(`🚀 Running on port ${PORT}`);
+});
