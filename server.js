@@ -84,7 +84,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
           pallets: [
             {
-              palletType: "H",
+              palletType: "F",
               numberofPallets: "1",
             },
           ],
@@ -94,7 +94,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
           // weight must be reasonable (kg)
           weight: "500",
 
-          serviceName: "A",
+          serviceName: "B",
           surcharges: "",
 
           customersUniqueReference: String(order.id),
@@ -103,8 +103,8 @@ app.post("/webhooks/order-paid", async (req, res) => {
           // 🚨 MUST EXIST (even if empty)
           notes: [
             {
-              noteName: "",
-              value: "",
+              noteName: "NOTE1",
+              value: "PLEASE CALL PRIOR TO DELIVERY",
             },
           ],
 
