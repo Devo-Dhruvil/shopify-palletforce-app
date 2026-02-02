@@ -2,38 +2,30 @@ import express from "express";
 import axios from "axios";
 
 const app = express();
-app.use(express.json());
-
 const PORT = process.env.PORT || 10000;
 
-// 🔑 Palletforce endpoint (LIVE)
-const PALLETFORCE_URL =
-  "https://apiuat.palletforce.net/api/ExternalScanning/UploadManifest";
+// IMPORTANT: body parser MUST be before routes
+app.use(express.json());
 
-const ACCESS_KEY = "6O3tb+LpAM";
-
-// Health check
-app.get("/", (_, res) => {
-  res.send("✅ Palletforce Manifest Service Running");
+// ✅ Health check
+app.get("/", (req, res) => {
+  res.send("Shopify → Palletforce webhook is running");
 });
 
-app.post("/webhook", async (req, res) => {
+// ✅ THIS MUST MATCH SHOPIFY URL EXACTLY
+app.post("/webhooks/order-paid", async (req, res) => {
   try {
+    console.log("🔥 WEBHOOK RECEIVED: ORDER PAID");
+    console.log("Order ID:", req.body.id);
+
     const order = req.body;
-    const orderId = order.id;
 
-    console.log("📦 Webhook received", orderId);
-
-    // ---- SAFE DELIVERY PHONE (MANDATORY) ----
-    const deliveryPhone =
-      order.shipping_address?.phone ||
-      order.customer?.phone ||
-      "01775347904"; // fallback REQUIRED
-
-    // ---- BUILD MANIFEST (STRICTLY PER SPEC) ----
+    // =========================
+    // Build Palletforce Manifest
+    // =========================
     const manifest = {
-      accessKey: ACCESS_KEY,
-      uniqueTransactionNumber: `SHOPIFY-${orderId}`,
+      accessKey: "6O3tb+LpAM",
+      uniqueTransactionNumber: `SHOPIFY-${order.id}`,
 
       collectionAddress: {
         name: "Indistone Ltd",
@@ -49,21 +41,20 @@ app.post("/webhook", async (req, res) => {
 
       deliveryAddress: {
         name: order.shipping_address?.name || "Customer",
-        streetAddress:
-          order.shipping_address?.address1 || "Unknown Street",
+        streetAddress: order.shipping_address?.address1 || "N/A",
         location: order.shipping_address?.address2 || "",
-        town: order.shipping_address?.city || "Unknown",
+        town: order.shipping_address?.city || "N/A",
         county: order.shipping_address?.province || "",
-        postcode: order.shipping_address?.zip || "UNKNOWN",
+        postcode: order.shipping_address?.zip || "N/A",
         countryCode: "GB",
-        phoneNumber: deliveryPhone,
+        phoneNumber: order.shipping_address?.phone || "0000000000", // 🔴 REQUIRED
         contactName: order.shipping_address?.name || "Customer"
       },
 
       consignments: [
         {
           requestingDepot: "121",
-          consignmentNumber: String(orderId),
+          consignmentNumber: String(order.id),
           CustomerAccountNumber: "indi001",
 
           datesAndTimes: [
@@ -81,20 +72,14 @@ app.post("/webhook", async (req, res) => {
           ],
 
           palletSpaces: "1",
-
-          // ⚠️ MAX 4 DIGITS (KG)
           weight: "950",
-
-          // ✅ EXACTLY ONE SERVICE
           serviceName: "A",
-
-          customersUniqueReference: String(orderId),
-
+          customersUniqueReference: String(order.id),
           insuranceCode: "05",
 
           notifications: [
             {
-              notificationType: "EMAIL",
+              notificationType: "email",
               value: order.email || "devodhruvil@gmail.com"
             }
           ],
@@ -106,34 +91,27 @@ app.post("/webhook", async (req, res) => {
       ]
     };
 
-    console.log("📤 Sending Manifest:\n", JSON.stringify(manifest, null, 2));
+    console.log("📤 Sending Manifest to Palletforce");
+    console.log(JSON.stringify(manifest, null, 2));
 
-    const response = await axios.post(
-  PALLETFORCE_URL,
-  manifest,
-  {
-    headers: {
-      "Content-Type": "application/json"
-    },
-    timeout: 30000
-  }
-);
+    // ✅ Palletforce endpoint (UPLOAD MANIFEST)
+    const PF_URL =
+      "https://api.palletforce.com/CustomerManifest/UploadManifest";
 
-
-    console.log("🚚 Palletforce Response:", response.data);
-
-    res.status(200).json({
-      ok: true,
-      palletforce: response.data
+    const pfResponse = await axios.post(PF_URL, manifest, {
+      headers: { "Content-Type": "application/json" }
     });
-  } catch (err) {
-    console.error("❌ Palletforce Error:", err?.response?.data || err.message);
-    res.status(500).json({
-      error: err?.response?.data || err.message
-    });
+
+    console.log("🚚 Palletforce Response:", pfResponse.data);
+
+    res.status(200).send("OK");
+  } catch (error) {
+    console.error("❌ ERROR:", error.response?.data || error.message);
+    res.status(500).send("Error");
   }
 });
 
+// ✅ Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
