@@ -63,7 +63,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
         {
           requestingDepot: "121",
           consignmentNumber: String(orderId),
-          CustomerAccountNumber: "indi 001",
+          CustomerAccountNumber: "indi001",
 
           datesAndTimes: [
             {
