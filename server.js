@@ -105,7 +105,8 @@ app.post("/webhooks/order-paid", async (req, res) => {
           insuranceCode: "05",
 
           // Notifications – type must be one of EMAIL / SMS / TWITTER (spec)
-          notifications:[],
+              notifications: undefined,
+
        
           // Optional extra fields, left blank
           surcharges: "",
