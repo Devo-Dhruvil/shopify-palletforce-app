@@ -11,17 +11,21 @@ app.use(express.json());
 const PALLETFORCE_URL =
   "https://apiuat.palletforce.net/api/ExternalScanning/UploadManifest";
 
-// Replace with the exact account number Palletforce gave you (no extra spaces)
-const PALLETFORCE_CUSTOMER_ACCOUNT = "indi 001"; // example – confirm with Palletforce
+// Exact customer account number from Palletforce (with space)
+const PALLETFORCE_CUSTOMER_ACCOUNT = "indi 001";
 
 // Shopify order paid webhook
 app.post("/webhooks/order-paid", async (req, res) => {
   try {
     const order = req.body;
     const orderId = order.id || order.order_number;
+    const orderIdStr = String(orderId);
 
     console.log("🔥 WEBHOOK RECEIVED: ORDER PAID");
-    console.log("Order ID:", orderId);
+    console.log("Order ID:", orderIdStr);
+
+    // Consignment number must be max 7 chars (per spec)
+    const consignmentNumber = orderIdStr.slice(-7);
 
     // Delivery phone – must not be blank, Palletforce requires phoneNumber
     const deliveryPhone =
@@ -35,7 +39,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
     const manifest = {
       accessKey: process.env.PF_ACCESS_KEY,
-      uniqueTransactionNumber: `SHOPIFY-${orderId}`,
+      uniqueTransactionNumber: `SHOPIFY-${orderIdStr}`,
 
       collectionAddress: {
         name: "Indistone Ltd",
@@ -64,12 +68,13 @@ app.post("/webhooks/order-paid", async (req, res) => {
       consignments: [
         {
           requestingDepot: "121", // from Palletforce “Customer Details” page
-          // leave collectingDepot, deliveryDepot, trackingNumber blank so Alliance allocates them
+
+          // Leave blank so Alliance allocates them
           collectingDepot: "",
           deliveryDepot: "",
           trackingNumber: "",
 
-          consignmentNumber: String(orderId),
+          consignmentNumber: consignmentNumber,
           CustomerAccountNumber: PALLETFORCE_CUSTOMER_ACCOUNT,
 
           datesAndTimes: [
@@ -91,23 +96,21 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
           palletSpaces: "1",
 
-          // Weight in kilos, rounded up
+          // Weight in kilos, rounded up (spec: total weight, rounded to nearest kg)
           weight: String(weightKg),
 
           // Service A = 24hr (see spec)
           serviceName: "A",
 
-          // Optional, but useful: Shopify order reference
-          customersUniqueReference: String(orderId),
+          // Keep full Shopify order number for reference
+          customersUniqueReference: orderIdStr,
           customersUniqueReference2: "",
 
           // Insurance code – confirm with Palletforce if different for you
           insuranceCode: "05",
 
-          // Notifications – type must be one of EMAIL / SMS / TWITTER (spec)
-              notifications: undefined,
+          // No notifications field (customer does not have notifications enabled)
 
-       
           // Optional extra fields, left blank
           surcharges: "",
           customerCharge: "",
