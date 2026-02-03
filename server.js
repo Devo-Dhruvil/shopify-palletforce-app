@@ -12,7 +12,7 @@ const PALLETFORCE_URL =
   "https://apiuat.palletforce.net/api/ExternalScanning/UploadManifest";
 
 // Replace with the exact account number Palletforce gave you (no extra spaces)
-const PALLETFORCE_CUSTOMER_ACCOUNT = "indi001"; // example – confirm with Palletforce
+const PALLETFORCE_CUSTOMER_ACCOUNT = "indi 001"; // example – confirm with Palletforce
 
 // Shopify order paid webhook
 app.post("/webhooks/order-paid", async (req, res) => {
@@ -106,10 +106,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
           // Notifications – type must be one of EMAIL / SMS / TWITTER (spec)
           notifications: [
-            {
-              notificationType: "EMAIL",
-              value: order.email || "devodhruvil@gmail.com"
-            }
+            
           ],
 
           // Optional extra fields, left blank
