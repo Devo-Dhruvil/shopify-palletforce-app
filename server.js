@@ -37,6 +37,9 @@ app.post("/webhooks/order-paid", async (req, res) => {
     const totalWeightGrams = order.total_weight || 5000; // fallback 5kg
     const weightKg = Math.max(1, Math.ceil(totalWeightGrams / 1000));
 
+    // Build a simple NOTE1 line (you can change the text as you like)
+    const noteValue = `Shopify order ${orderIdStr}`;
+
     const manifest = {
       accessKey: process.env.PF_ACCESS_KEY,
       uniqueTransactionNumber: `SHOPIFY-${orderIdStr}`,
@@ -67,9 +70,8 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
       consignments: [
         {
-          requestingDepot: "121", // from Palletforce “Customer Details” page
+          requestingDepot: "121",
 
-          // Leave blank so Alliance allocates them
           collectingDepot: "",
           deliveryDepot: "",
           trackingNumber: "",
@@ -89,29 +91,36 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
           pallets: [
             {
-              palletType: "H", // Half pallet
+              palletType: "H",
               numberofPallets: "1"
             }
           ],
 
           palletSpaces: "1",
-
-          // Weight in kilos, rounded up (spec: total weight, rounded to nearest kg)
           weight: String(weightKg),
-
-          // Service A = 24hr (see spec)
           serviceName: "A",
 
-          // Keep full Shopify order number for reference
           customersUniqueReference: orderIdStr,
           customersUniqueReference2: "",
 
-          // Insurance code – confirm with Palletforce if different for you
           insuranceCode: "05",
 
-          // No notifications field (customer does not have notifications enabled)
+          // ✅ Notes – use valid noteName values (NOTE1–NOTE4)
+          notes: [
+            {
+              noteName: "NOTE1",
+              value: noteValue
+            }
+          ],
 
-          // Optional extra fields, left blank
+          // ✅ Notifications – type must be EMAIL / SMS / TWITTER (upper‑case)
+          notifications: [
+            {
+              notificationType: "email",
+              value: order.email || deliveryPhone || "devodhruvil@gmail.com"
+            }
+          ],
+
           surcharges: "",
           customerCharge: "",
           nonPalletforceConsignment: "",
@@ -123,7 +132,6 @@ app.post("/webhooks/order-paid", async (req, res) => {
           additionalDetails: {
             lines: []
           }
-          // acceptedStatus left blank → treated as accepted according to spec
         }
       ]
     };
