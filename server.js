@@ -162,28 +162,11 @@ app.listen(PORT, () => {
 });
 
 
-async function saveTrackingToShopify(orderId, trackingNumber) {
+
+
+async function saveTrackingToShopify(orderId, trackingNumber, lineItems) {
   const baseUrl = `https://${process.env.SHOPIFY_SHOP}/admin/api/2024-01`;
 
-  // 1️⃣ Get fulfillment orders for the order
-  const foRes = await fetch(
-    `${baseUrl}/orders/${orderId}/fulfillment_orders.json`,
-    {
-      headers: {
-        "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
-        "Content-Type": "application/json",
-      },
-    }
-  );
-
-  const foData = await foRes.json();
-  const fulfillmentOrder = foData.fulfillment_orders?.[0];
-
-  if (!fulfillmentOrder) {
-    throw new Error("❌ No fulfillment order found");
-  }
-
-  // 2️⃣ Create fulfillment USING fulfillment_order_id (CORRECT)
   const payload = {
     fulfillment: {
       tracking_info: {
@@ -192,11 +175,15 @@ async function saveTrackingToShopify(orderId, trackingNumber) {
         url: `https://www.palletforce.com/track/?tracking=${trackingNumber}`,
       },
       notify_customer: true,
-    },
+      line_items: lineItems.map(item => ({
+        id: item.id,
+        quantity: item.quantity
+      }))
+    }
   };
 
   const res = await fetch(
-    `${baseUrl}/fulfillment_orders/${fulfillmentOrder.id}/fulfillments.json`,
+    `${baseUrl}/orders/${orderId}/fulfillments.json`,
     {
       method: "POST",
       headers: {
@@ -216,6 +203,5 @@ async function saveTrackingToShopify(orderId, trackingNumber) {
 
   console.log("✅ Tracking saved to Shopify:", trackingNumber);
 }
-
 
 
