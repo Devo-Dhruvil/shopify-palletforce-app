@@ -165,12 +165,13 @@ app.listen(PORT, () => {
 async function saveTrackingToShopify(orderId, trackingNumber) {
   const baseUrl = `https://${process.env.SHOPIFY_SHOP}/admin/api/2024-01`;
 
-  // 1️⃣ Get fulfillment orders
+  // 1️⃣ Get fulfillment orders for the order
   const foRes = await fetch(
     `${baseUrl}/orders/${orderId}/fulfillment_orders.json`,
     {
       headers: {
         "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
+        "Content-Type": "application/json",
       },
     }
   );
@@ -179,17 +180,12 @@ async function saveTrackingToShopify(orderId, trackingNumber) {
   const fulfillmentOrder = foData.fulfillment_orders?.[0];
 
   if (!fulfillmentOrder) {
-    throw new Error("No fulfillment order found");
+    throw new Error("❌ No fulfillment order found");
   }
 
-  // 2️⃣ Create fulfillment with tracking
+  // 2️⃣ Create fulfillment USING fulfillment_order_id (CORRECT)
   const payload = {
     fulfillment: {
-      line_items_by_fulfillment_order: [
-        {
-          fulfillment_order_id: fulfillmentOrder.id,
-        },
-      ],
       tracking_info: {
         number: trackingNumber,
         company: "Palletforce",
@@ -199,22 +195,27 @@ async function saveTrackingToShopify(orderId, trackingNumber) {
     },
   };
 
-  const res = await fetch(`${baseUrl}/fulfillments.json`, {
-    method: "POST",
-    headers: {
-      "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
+  const res = await fetch(
+    `${baseUrl}/fulfillment_orders/${fulfillmentOrder.id}/fulfillments.json`,
+    {
+      method: "POST",
+      headers: {
+        "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    }
+  );
 
   const data = await res.json();
 
   if (!res.ok) {
     console.error("❌ Shopify fulfillment error:", data);
-    throw new Error("Failed to save tracking");
+    throw new Error("Failed to save tracking to Shopify");
   }
 
   console.log("✅ Tracking saved to Shopify:", trackingNumber);
 }
+
+
 
