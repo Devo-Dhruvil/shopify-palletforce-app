@@ -7,6 +7,31 @@ const app = express();
 // Parse JSON body from Shopify
 app.use(express.json());
 
+
+
+
+// Default Palletforce service = B (paid)
+let serviceName = "B";
+
+// Shopify shipping lines (array)
+const shippingLine = order.shipping_lines?.[0];
+
+// Extract numeric shipping price safely
+const shippingPrice = Number(shippingLine?.price || 0);
+
+// FREE shipping → Service D
+if (shippingPrice === 0) {
+  serviceName = "D";
+}
+
+console.log("🚚 Shipping price:", shippingPrice);
+console.log("📦 Palletforce serviceName:", serviceName);
+
+
+
+
+
+
 // Palletforce UAT UploadManifest endpoint
 const PALLETFORCE_URL =
   "https://apiuat.palletforce.net/api/ExternalScanning/UploadManifest";
@@ -98,7 +123,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
           palletSpaces: "1",
           weight: String(weightKg),
-          serviceName: "A",
+          serviceName: serviceName,
 
           customersUniqueReference: orderIdStr,
           customersUniqueReference2: "",
@@ -173,6 +198,9 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log("🚀 Server running on port", PORT);
 });
+
+
+
 
 
 
