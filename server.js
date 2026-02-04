@@ -163,34 +163,58 @@ app.listen(PORT, () => {
 
 
 async function saveTrackingToShopify(orderId, trackingNumber) {
-  const url = `https://${process.env.SHOPIFY_SHOP}/admin/api/2024-01/orders/${orderId}/fulfillments.json`;
+  const baseUrl = `https://${process.env.SHOPIFY_SHOP}/admin/api/2024-01`;
 
+  // 1️⃣ Get fulfillment orders
+  const foRes = await fetch(
+    `${baseUrl}/orders/${orderId}/fulfillment_orders.json`,
+    {
+      headers: {
+        "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
+      },
+    }
+  );
+
+  const foData = await foRes.json();
+  const fulfillmentOrder = foData.fulfillment_orders?.[0];
+
+  if (!fulfillmentOrder) {
+    throw new Error("No fulfillment order found");
+  }
+
+  // 2️⃣ Create fulfillment with tracking
   const payload = {
     fulfillment: {
+      line_items_by_fulfillment_order: [
+        {
+          fulfillment_order_id: fulfillmentOrder.id,
+        },
+      ],
       tracking_info: {
         number: trackingNumber,
         company: "Palletforce",
-        url: `https://www.palletforce.com/track/?tracking=${trackingNumber}`
+        url: `https://www.palletforce.com/track/?tracking=${trackingNumber}`,
       },
-      notify_customer: true
-    }
+      notify_customer: true,
+    },
   };
 
-  const res = await fetch(url, {
+  const res = await fetch(`${baseUrl}/fulfillments.json`, {
     method: "POST",
     headers: {
       "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 
   const data = await res.json();
 
   if (!res.ok) {
-    console.error("❌ Shopify Fulfillment Error:", data);
-    throw new Error("Failed to save tracking to Shopify");
+    console.error("❌ Shopify fulfillment error:", data);
+    throw new Error("Failed to save tracking");
   }
 
   console.log("✅ Tracking saved to Shopify:", trackingNumber);
 }
+
