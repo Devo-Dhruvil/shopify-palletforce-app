@@ -145,7 +145,20 @@ app.post("/webhooks/order-paid", async (req, res) => {
     });
 
     console.log("🚚 Palletforce Response:", response.data);
-    res.status(200).send("OK");
+
+if (
+  response.data?.success === true &&
+  response.data.successfulTrackingCodes?.length
+) {
+  const trackingNumber = response.data.successfulTrackingCodes[0];
+
+  // 🔥 SAVE TRACKING TO SHOPIFY
+  await saveTrackingToShopify(order.id, trackingNumber);
+}
+
+res.status(200).send("OK");
+
+
   } catch (error) {
     console.error(
       "❌ ERROR:",
@@ -163,45 +176,52 @@ app.listen(PORT, () => {
 
 
 
-
-async function saveTrackingToShopify(orderId, trackingNumber, lineItems) {
+ async function saveTrackingToShopify(orderId, trackingNumber) {
   const baseUrl = `https://${process.env.SHOPIFY_SHOP}/admin/api/2024-01`;
 
+  // 1️⃣ Get fulfillment orders
+  const foRes = await axios.get(
+    `${baseUrl}/orders/${orderId}/fulfillment_orders.json`,
+    {
+      headers: {
+        "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
+      },
+    }
+  );
+
+  const fulfillmentOrder = foRes.data.fulfillment_orders?.[0];
+
+  if (!fulfillmentOrder) {
+    throw new Error("No fulfillment order found");
+  }
+
+  // 2️⃣ Create fulfillment with tracking
   const payload = {
     fulfillment: {
+      line_items_by_fulfillment_order: [
+        {
+          fulfillment_order_id: fulfillmentOrder.id,
+        },
+      ],
       tracking_info: {
         number: trackingNumber,
         company: "Palletforce",
         url: `https://www.palletforce.com/track/?tracking=${trackingNumber}`,
       },
       notify_customer: true,
-      line_items: lineItems.map(item => ({
-        id: item.id,
-        quantity: item.quantity
-      }))
-    }
+    },
   };
 
-  const res = await fetch(
-    `${baseUrl}/orders/${orderId}/fulfillments.json`,
+  const res = await axios.post(
+    `${baseUrl}/fulfillments.json`,
+    payload,
     {
-      method: "POST",
       headers: {
         "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
     }
   );
 
-  const data = await res.json();
-
-  if (!res.ok) {
-    console.error("❌ Shopify fulfillment error:", data);
-    throw new Error("Failed to save tracking to Shopify");
-  }
-
   console.log("✅ Tracking saved to Shopify:", trackingNumber);
 }
-
-
