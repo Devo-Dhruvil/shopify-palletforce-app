@@ -189,11 +189,14 @@ app.listen(PORT, () => {
     }
   );
 
-  const fulfillmentOrder = foRes.data.fulfillment_orders?.[0];
+  const fulfillmentOrder = foRes.data.fulfillment_orders?.find(
+  fo => fo.status === "open"
+);
 
-  if (!fulfillmentOrder) {
-    throw new Error("No fulfillment order found");
-  }
+ if (!fulfillmentOrder) {
+  console.log("⚠️ No open fulfillment order — skipping Shopify update");
+  return;
+}
 
   // 2️⃣ Create fulfillment with tracking
   const payload = {
