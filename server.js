@@ -160,3 +160,37 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log("🚀 Server running on port", PORT);
 });
+
+
+async function saveTrackingToShopify(orderId, trackingNumber) {
+  const url = `https://${process.env.SHOPIFY_SHOP}/admin/api/2024-01/orders/${orderId}/fulfillments.json`;
+
+  const payload = {
+    fulfillment: {
+      tracking_info: {
+        number: trackingNumber,
+        company: "Palletforce",
+        url: `https://www.palletforce.com/track/?tracking=${trackingNumber}`
+      },
+      notify_customer: true
+    }
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    console.error("❌ Shopify Fulfillment Error:", data);
+    throw new Error("Failed to save tracking to Shopify");
+  }
+
+  console.log("✅ Tracking saved to Shopify:", trackingNumber);
+}
