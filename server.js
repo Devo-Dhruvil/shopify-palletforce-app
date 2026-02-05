@@ -7,6 +7,8 @@ const app = express();
 // Parse JSON body from Shopify
 app.use(express.json());
 
+
+
 // Palletforce UAT UploadManifest endpoint
 const PALLETFORCE_URL =
   "https://apiuat.palletforce.net/api/ExternalScanning/UploadManifest";
@@ -18,6 +20,51 @@ const PALLETFORCE_CUSTOMER_ACCOUNT = "indi 001";
 app.post("/webhooks/order-paid", async (req, res) => {
   try {
     const order = req.body;
+
+
+    // ✅ Determine Palletforce service dynamically
+let serviceName = "B"; // default = paid shipping
+
+const shippingLine = order.shipping_lines?.[0];
+const shippingPrice = Number(shippingLine?.price || 0);
+
+if (shippingPrice === 0) {
+  serviceName = "D"; // FREE shipping
+}
+
+console.log("🚚 Shipping price:", shippingPrice);
+console.log("📦 Palletforce serviceName:", serviceName);
+
+const deliveryPhone =
+      order.shipping_address?.phone || order.phone || "07123456789";
+
+
+// ===============================
+// NOTIFICATIONS (EMAIL → SMS FALLBACK)
+// ===============================
+let notifications = [];
+
+if (order.email) {
+  notifications.push({
+    notificationType: "email",
+    value: order.email,
+  });
+} else if (deliveryPhone) {
+  notifications.push({
+    notificationType: "SMS",
+    value: deliveryPhone,
+  });
+} else {
+  notifications.push({
+    notificationType: "email",
+    value: "devodhruvil@gmail.com",
+  });
+}
+
+console.log("📨 Notifications:", notifications);
+
+
+
     const orderId = order.id || order.order_number;
     const orderIdStr = String(orderId);
 
@@ -27,11 +74,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
     // Consignment number must be max 7 chars (per spec)
     const consignmentNumber = orderIdStr.slice(-7);
 
-    // Delivery phone – must not be blank, Palletforce requires phoneNumber
-    const deliveryPhone =
-      order.shipping_address?.phone ||
-      order.phone ||
-      "07123456789";
+ 
 
     // Use Shopify total_weight (grams) → kg, minimum 1kg
     const totalWeightGrams = order.total_weight || 5000; // fallback 5kg
@@ -91,14 +134,20 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
           pallets: [
             {
+              palletType: "F",
+              numberofPallets: "2"
+            },
+            {
               palletType: "H",
               numberofPallets: "1"
             }
           ],
 
-          palletSpaces: "1",
+          palletSpaces: "3",
           weight: String(weightKg),
-          serviceName: "A",
+
+          
+          serviceName: serviceName,
 
           customersUniqueReference: orderIdStr,
           customersUniqueReference2: "",
@@ -114,12 +163,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
           ],
 
           // ✅ Notifications – type must be EMAIL / SMS / TWITTER (upper‑case)
-          notifications: [
-            {
-              notificationType: "email",
-              value: order.email || deliveryPhone || "devodhruvil@gmail.com"
-            }
-          ],
+       notifications: notifications,
 
           surcharges: "",
           customerCharge: "",
@@ -145,7 +189,20 @@ app.post("/webhooks/order-paid", async (req, res) => {
     });
 
     console.log("🚚 Palletforce Response:", response.data);
-    res.status(200).send("OK");
+
+if (
+  response.data?.success === true &&
+  response.data.successfulTrackingCodes?.length
+) {
+  const trackingNumber = response.data.successfulTrackingCodes[0];
+
+  // 🔥 SAVE TRACKING TO SHOPIFY
+  await saveTrackingToShopify(order.id, trackingNumber);
+}
+
+res.status(200).send("OK");
+
+
   } catch (error) {
     console.error(
       "❌ ERROR:",
@@ -164,42 +221,57 @@ app.listen(PORT, () => {
 
 
 
-async function saveTrackingToShopify(orderId, trackingNumber, lineItems) {
+
+
+ async function saveTrackingToShopify(orderId, trackingNumber) {
   const baseUrl = `https://${process.env.SHOPIFY_SHOP}/admin/api/2024-01`;
 
+  // 1️⃣ Get fulfillment orders
+  const foRes = await axios.get(
+    `${baseUrl}/orders/${orderId}/fulfillment_orders.json`,
+    {
+      headers: {
+        "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
+      },
+    }
+  );
+
+  const fulfillmentOrder = foRes.data.fulfillment_orders?.find(
+  fo => fo.status === "open"
+);
+
+ if (!fulfillmentOrder) {
+  console.log("⚠️ No open fulfillment order — skipping Shopify update");
+  return;
+}
+
+  // 2️⃣ Create fulfillment with tracking
   const payload = {
     fulfillment: {
+      line_items_by_fulfillment_order: [
+        {
+          fulfillment_order_id: fulfillmentOrder.id,
+        },
+      ],
       tracking_info: {
         number: trackingNumber,
         company: "Palletforce",
         url: `https://www.palletforce.com/track/?tracking=${trackingNumber}`,
       },
       notify_customer: true,
-      line_items: lineItems.map(item => ({
-        id: item.id,
-        quantity: item.quantity
-      }))
-    }
+    },
   };
 
-  const res = await fetch(
-    `${baseUrl}/orders/${orderId}/fulfillments.json`,
+  const res = await axios.post(
+    `${baseUrl}/fulfillments.json`,
+    payload,
     {
-      method: "POST",
       headers: {
         "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
     }
   );
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    console.error("❌ Shopify fulfillment error:", data);
-    throw new Error("Failed to save tracking to Shopify");
-  }
 
   console.log("✅ Tracking saved to Shopify:", trackingNumber);
 }
