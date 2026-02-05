@@ -100,30 +100,53 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
     console.log("📨 Notifications:", notifications);
 
-    // ===============================
-    // TOTAL COVERAGE
-    // ===============================
-    let totalCoverage = 0;
+ // ===============================
+// 2️⃣ TOTAL COVERAGE (FIXED)
+// ===============================
+let totalCoverage = 0;
 
-    for (const item of order.line_items || []) {
-      const qty = Number(item.quantity || 1);
-      let coverage = 0;
+for (const item of order.line_items || []) {
+  const qty = Number(item.quantity || 1);
+  let coveragePerUnit = 0;
 
-      const prop = item.properties?.find(p =>
-        p.name?.toLowerCase().includes("coverage")
-      );
+  // 1️⃣ Check line item properties
+  const coverageProp = item.properties?.find(p =>
+    p.name?.toLowerCase().includes("coverage")
+  );
 
-      if (prop) coverage = parseFloat(prop.value);
+  if (coverageProp && coverageProp.value) {
+    coveragePerUnit = parseFloat(coverageProp.value);
+  }
 
-      if (!coverage && item.variant_title) {
-        const match = item.variant_title.match(/([\d.]+)\s?m²/i);
-        if (match) coverage = parseFloat(match[1]);
-      }
-
-      totalCoverage += coverage * qty;
+  // 2️⃣ Fallback: variant title (e.g. "10.08m²", "19.5m2")
+  if (!coveragePerUnit && item.variant_title) {
+    const match = item.variant_title.match(/([\d.]+)\s?m²|m2/i);
+    if (match) {
+      coveragePerUnit = parseFloat(match[1]);
     }
+  }
 
-    console.log(`📐 Total coverage: ${totalCoverage} m²`);
+  // 3️⃣ Final safety fallback
+  if (!coveragePerUnit) {
+    console.warn(
+      `⚠️ No coverage found for item "${item.title}", qty ${qty}`
+    );
+    continue;
+  }
+
+  const lineCoverage = coveragePerUnit * qty;
+  totalCoverage += lineCoverage;
+
+  console.log(
+    `🧮 ${item.title}: ${coveragePerUnit}m² × ${qty} = ${lineCoverage}m²`
+  );
+}
+
+// Round to 2 decimals (important)
+totalCoverage = Math.round(totalCoverage * 100) / 100;
+
+console.log(`📐 Total coverage: ${totalCoverage} m²`);
+
 
     // ===============================
     // PALLETS & WEIGHT
@@ -171,7 +194,12 @@ app.post("/webhooks/order-paid", async (req, res) => {
       consignments: [
         {
           requestingDepot: "121",
-          consignmentNumber,
+         
+          collectingDepot: "",
+          deliveryDepot: "",
+          trackingNumber: "",
+
+          consignmentNumber: consignmentNumber,
           CustomerAccountNumber: PALLETFORCE_CUSTOMER_ACCOUNT,
 
           datesAndTimes: [
@@ -200,6 +228,14 @@ app.post("/webhooks/order-paid", async (req, res) => {
           ],
 
           notifications,
+          surcharges: "",
+          customerCharge: "",
+          nonPalletforceConsignment: "",
+          deliveryVehicleCode: "",
+          consignmentType: "",
+          hubIdentifyingCode: "",
+          cartonCount: "",
+          aSNFBABOLReferenceNumber: "",
           additionalDetails: { lines: [] },
         },
       ],
