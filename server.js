@@ -111,7 +111,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
     let palletSpaces = 0;
     let totalWeight = 0;
 
-    if (totalCoverage < FULL_PALLET_COVERAGE) {
+    if (totalCoverage <= FULL_PALLET_COVERAGE) {
       // < 10 m² → HALF pallet
       pallets.push({ palletType: "H", numberofPallets: "1" });
       palletSpaces = 1;
