@@ -42,6 +42,39 @@ app.post("/webhooks/order-paid", async (req, res) => {
     console.log("🚚 Shipping price:", shippingPrice);
     console.log("📦 Palletforce serviceName:", serviceName);
 
+
+
+const deliveryPhone =
+      order.shipping_address?.phone || order.phone || "07123456789";
+
+
+// ===============================
+// NOTIFICATIONS (EMAIL → SMS FALLBACK)
+// ===============================
+let notifications = [];
+
+if (order.email) {
+  notifications.push({
+    notificationType: "email",
+    value: order.email,
+  });
+} else if (deliveryPhone) {
+  notifications.push({
+    notificationType: "SMS",
+    value: deliveryPhone,
+  });
+} else {
+  notifications.push({
+    notificationType: "email",
+    value: "devodhruvil@gmail.com",
+  });
+}
+
+console.log("📨 Notifications:", notifications);
+
+
+
+
     // ===============================
     // 2️⃣ TOTAL COVERAGE (ALL ITEMS)
     // ===============================
@@ -114,30 +147,6 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
 
 
-// ===============================
-// NOTIFICATIONS (EMAIL → SMS FALLBACK)
-// ===============================
-let notifications = [];
-
-if (order.email) {
-  notifications.push({
-    notificationType: "EMAIL",
-    value: order.email,
-  });
-} else if (deliveryPhone) {
-  notifications.push({
-    notificationType: "SMS",
-    value: deliveryPhone,
-  });
-} else {
-  // Ultimate fallback (recommended)
-  notifications.push({
-    notificationType: "EMAIL",
-    value: "devodhruvil@gmail.com",
-  });
-}
-
-console.log("📨 Notifications:", notifications);
 
 
 
@@ -145,8 +154,7 @@ console.log("📨 Notifications:", notifications);
     // 6️⃣ MANIFEST BUILD
     // ===============================
     const consignmentNumber = orderIdStr.slice(-7);
-    const deliveryPhone =
-      order.shipping_address?.phone || order.phone || "07123456789";
+    
 
     const manifest = {
       accessKey: process.env.PF_ACCESS_KEY,
