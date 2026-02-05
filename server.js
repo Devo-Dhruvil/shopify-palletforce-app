@@ -5,113 +5,119 @@ require("dotenv").config();
 const app = express();
 app.use(express.json());
 
-// Palletforce UAT UploadManifest endpoint
+// ===============================
+// CONFIG
+// ===============================
 const PALLETFORCE_URL =
   "https://apiuat.palletforce.net/api/ExternalScanning/UploadManifest";
 
-// Exact customer account number from Palletforce
 const PALLETFORCE_CUSTOMER_ACCOUNT = "indi 001";
 
-/**
- * 🧮 Calculate pallets + weight from total coverage
- */
-function calculatePalletsFromCoverage(totalCoverage) {
-  const FULL_PALLET_COVERAGE = 10;
-  const FULL_PALLET_WEIGHT = 1250;
-  const HALF_PALLET_WEIGHT = 500;
+// Pallet rules
+const FULL_PALLET_SIZE = 10;     // m²
+const FULL_PALLET_WEIGHT = 1250; // kg
+const HALF_PALLET_WEIGHT = 500;  // kg
 
-  const fullPallets = Math.floor(totalCoverage / FULL_PALLET_COVERAGE);
-  const remainder = totalCoverage % FULL_PALLET_COVERAGE;
-  const halfPallets = remainder > 0 ? 1 : 0;
-
-  const pallets = [];
-  if (fullPallets > 0) {
-    pallets.push({
-      palletType: "F",
-      numberofPallets: String(fullPallets),
-    });
-  }
-
-  if (halfPallets > 0) {
-    pallets.push({
-      palletType: "H",
-      numberofPallets: "1",
-    });
-  }
-
-  const palletSpaces = fullPallets + halfPallets;
-  const totalWeight =
-    fullPallets * FULL_PALLET_WEIGHT +
-    halfPallets * HALF_PALLET_WEIGHT;
-
-  return {
-    pallets,
-    palletSpaces: String(palletSpaces),
-    weight: String(totalWeight),
-  };
-}
-
-// Shopify order paid webhook
+// ===============================
+// WEBHOOK: ORDER PAID
+// ===============================
 app.post("/webhooks/order-paid", async (req, res) => {
   try {
     const order = req.body;
+    const orderId = order.id;
+    const orderIdStr = String(orderId);
 
     console.log("🔥 WEBHOOK RECEIVED: ORDER PAID");
-    console.log("Order ID:", order.id);
+    console.log("Order ID:", orderIdStr);
 
-    /**
-     * 🚚 Service Name logic
-     */
-    let serviceName = "B"; // Paid by default
+    // ===============================
+    // 1️⃣ SERVICE NAME (B / D)
+    // ===============================
+    let serviceName = "B"; // default = paid
     const shippingLine = order.shipping_lines?.[0];
     const shippingPrice = Number(shippingLine?.price || 0);
 
-    if (shippingPrice === 0) {
-      serviceName = "D"; // FREE shipping
-    }
+    if (shippingPrice === 0) serviceName = "D";
 
     console.log("🚚 Shipping price:", shippingPrice);
     console.log("📦 Palletforce serviceName:", serviceName);
 
-    /**
-     * 📐 TOTAL COVERAGE CALCULATION
-     * Reads "Coverage: 15.5m²" from product title / variant title
-     */
+    // ===============================
+    // 2️⃣ TOTAL COVERAGE (ALL ITEMS)
+    // ===============================
     let totalCoverage = 0;
 
     for (const item of order.line_items || []) {
-      const text =
-        item.variant_title ||
-        item.title ||
-        "";
+      const qty = Number(item.quantity || 1);
+      let coverage = 0;
 
-      const match = text.match(/([\d.]+)\s?m²/i);
-      if (match) {
-        totalCoverage += Number(match[1]) * item.quantity;
+      // Try properties first
+      const coverageProp = item.properties?.find(p =>
+        p.name?.toLowerCase().includes("coverage")
+      );
+
+      if (coverageProp) {
+        coverage = parseFloat(coverageProp.value);
       }
+
+      // Fallback: variant title (e.g. "15.5m²")
+      if (!coverage && item.variant_title) {
+        const match = item.variant_title.match(/([\d.]+)\s?m²/i);
+        if (match) coverage = parseFloat(match[1]);
+      }
+
+      totalCoverage += coverage * qty;
     }
 
-    if (totalCoverage === 0) {
-      // Fallback safety
-      totalCoverage = 10;
+    console.log(`📐 Total coverage: ${totalCoverage} m²`);
+
+    // ===============================
+    // 3️⃣ PALLET CALCULATION
+    // ===============================
+    let fullPallets = Math.floor(totalCoverage / FULL_PALLET_SIZE);
+    let remainder = totalCoverage % FULL_PALLET_SIZE;
+    let halfPallets = remainder > 0 ? 1 : 0;
+
+    // Coverage <= 10 → half pallet
+    if (totalCoverage > 0 && totalCoverage <= 10) {
+      fullPallets = 0;
+      halfPallets = 1;
     }
 
-    console.log("📐 Total coverage:", totalCoverage, "m²");
+    const palletSpaces = fullPallets + halfPallets;
 
-    const palletData = calculatePalletsFromCoverage(totalCoverage);
+    // ===============================
+    // 4️⃣ WEIGHT CALCULATION
+    // ===============================
+    const weightKg =
+      fullPallets * FULL_PALLET_WEIGHT +
+      halfPallets * HALF_PALLET_WEIGHT;
 
-    /**
-     * 🧾 Order basics
-     */
-    const orderIdStr = String(order.id);
+    // ===============================
+    // 5️⃣ PALLET ARRAY
+    // ===============================
+    const pallets = [];
+
+    if (fullPallets > 0) {
+      pallets.push({
+        palletType: "F",
+        numberofPallets: String(fullPallets),
+      });
+    }
+
+    if (halfPallets > 0) {
+      pallets.push({
+        palletType: "H",
+        numberofPallets: String(halfPallets),
+      });
+    }
+
+    // ===============================
+    // 6️⃣ MANIFEST BUILD
+    // ===============================
     const consignmentNumber = orderIdStr.slice(-7);
-
     const deliveryPhone =
-      order.shipping_address?.phone ||
-      order.phone ||
-      "07123456789";
-
-    const noteValue = `Shopify order ${orderIdStr}`;
+      order.shipping_address?.phone || order.phone || "07123456789";
 
     const manifest = {
       accessKey: process.env.PF_ACCESS_KEY,
@@ -144,9 +150,6 @@ app.post("/webhooks/order-paid", async (req, res) => {
       consignments: [
         {
           requestingDepot: "121",
-          collectingDepot: "",
-          deliveryDepot: "",
-          trackingNumber: "",
           consignmentNumber,
           CustomerAccountNumber: PALLETFORCE_CUSTOMER_ACCOUNT,
 
@@ -160,20 +163,18 @@ app.post("/webhooks/order-paid", async (req, res) => {
             },
           ],
 
-          pallets: palletData.pallets,
-          palletSpaces: palletData.palletSpaces,
-          weight: palletData.weight,
-
+          pallets,
+          palletSpaces: String(palletSpaces),
+          weight: String(weightKg),
           serviceName,
 
           customersUniqueReference: orderIdStr,
-          customersUniqueReference2: "",
           insuranceCode: "05",
 
           notes: [
             {
               noteName: "NOTE1",
-              value: noteValue,
+              value: `Shopify order ${orderIdStr} | ${totalCoverage}m²`,
             },
           ],
 
@@ -192,31 +193,39 @@ app.post("/webhooks/order-paid", async (req, res) => {
     console.log("📤 Sending Manifest to Palletforce");
     console.log(JSON.stringify(manifest, null, 2));
 
+    // ===============================
+    // 7️⃣ SEND TO PALLETFORCE
+    // ===============================
     const response = await axios.post(PALLETFORCE_URL, manifest, {
       headers: { "Content-Type": "application/json" },
-      timeout: 15000,
+      timeout: 20000,
     });
 
     console.log("🚚 Palletforce Response:", response.data);
 
+    // ===============================
+    // 8️⃣ SAVE TRACKING TO SHOPIFY
+    // ===============================
     if (
-      response.data?.success &&
+      response.data?.success === true &&
       response.data.successfulTrackingCodes?.length
     ) {
       await saveTrackingToShopify(
-        order.id,
+        orderId,
         response.data.successfulTrackingCodes[0]
       );
     }
 
     res.status(200).send("OK");
-  } catch (error) {
-    console.error("❌ ERROR:", error.response?.data || error.message);
+  } catch (err) {
+    console.error("❌ ERROR:", err.response?.data || err.message);
     res.status(500).send("ERROR");
   }
 });
 
-// Shopify fulfillment save
+// ===============================
+// SAVE TRACKING TO SHOPIFY
+// ===============================
 async function saveTrackingToShopify(orderId, trackingNumber) {
   const baseUrl = `https://${process.env.SHOPIFY_SHOP}/admin/api/2024-01`;
 
@@ -224,18 +233,17 @@ async function saveTrackingToShopify(orderId, trackingNumber) {
     `${baseUrl}/orders/${orderId}/fulfillment_orders.json`,
     {
       headers: {
-        "X-Shopify-Access-Token":
-          process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
+        "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
       },
     }
   );
 
   const fulfillmentOrder = foRes.data.fulfillment_orders?.find(
-    (fo) => fo.status === "open"
+    fo => fo.status === "open"
   );
 
   if (!fulfillmentOrder) {
-    console.log("⚠️ No open fulfillment order");
+    console.log("⚠️ No open fulfillment order — skipping Shopify update");
     return;
   }
 
@@ -256,8 +264,7 @@ async function saveTrackingToShopify(orderId, trackingNumber) {
     },
     {
       headers: {
-        "X-Shopify-Access-Token":
-          process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
+        "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
         "Content-Type": "application/json",
       },
     }
@@ -266,8 +273,7 @@ async function saveTrackingToShopify(orderId, trackingNumber) {
   console.log("✅ Tracking saved to Shopify:", trackingNumber);
 }
 
-// Start server
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () =>
-  console.log("🚀 Server running on port", PORT)
+// ===============================
+app.listen(process.env.PORT || 10000, () =>
+  console.log("🚀 Server running")
 );
