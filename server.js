@@ -13,10 +13,10 @@ const PALLETFORCE_URL =
 
 const PALLETFORCE_CUSTOMER_ACCOUNT = "indi 001";
 
-// Pallet rules
-const FULL_PALLET_SIZE = 10;     // m²
-const FULL_PALLET_WEIGHT = 1250; // kg
-const HALF_PALLET_WEIGHT = 500;  // kg
+// Pallet rules (FINAL – VERIFIED)
+const FULL_PALLET_COVERAGE = 10;     // m²
+const FULL_PALLET_WEIGHT = 1250;     // kg
+const HALF_PALLET_WEIGHT = 500;      // kg
 
 // ===============================
 // WEBHOOK: ORDER PAID
@@ -31,9 +31,17 @@ app.post("/webhooks/order-paid", async (req, res) => {
     console.log("Order ID:", orderIdStr);
 
     // ===============================
-    // 1️⃣ SERVICE NAME (B / D)
+    // DELIVERY PHONE (SAFE)
     // ===============================
-    let serviceName = "B"; // default = paid
+    const deliveryPhone =
+      order.shipping_address?.phone ||
+      order.phone ||
+      "07123456789";
+
+    // ===============================
+    // SERVICE NAME (B / D)
+    // ===============================
+    let serviceName = "B"; // paid by default
     const shippingLine = order.shipping_lines?.[0];
     const shippingPrice = Number(shippingLine?.price || 0);
 
@@ -42,41 +50,32 @@ app.post("/webhooks/order-paid", async (req, res) => {
     console.log("🚚 Shipping price:", shippingPrice);
     console.log("📦 Palletforce serviceName:", serviceName);
 
+    // ===============================
+    // NOTIFICATIONS (EMAIL → SMS)
+    // ===============================
+    let notifications = [];
 
+    if (order.email) {
+      notifications.push({
+        notificationType: "email",
+        value: order.email,
+      });
+    } else if (deliveryPhone) {
+      notifications.push({
+        notificationType: "SMS",
+        value: deliveryPhone,
+      });
+    } else {
+      notifications.push({
+        notificationType: "email",
+        value: "devodhruvil@gmail.com",
+      });
+    }
 
-const deliveryPhone =
-      order.shipping_address?.phone || order.phone || "07123456789";
-
-
-// ===============================
-// NOTIFICATIONS (EMAIL → SMS FALLBACK)
-// ===============================
-let notifications = [];
-
-if (order.email) {
-  notifications.push({
-    notificationType: "email",
-    value: order.email,
-  });
-} else if (deliveryPhone) {
-  notifications.push({
-    notificationType: "SMS",
-    value: deliveryPhone,
-  });
-} else {
-  notifications.push({
-    notificationType: "email",
-    value: "devodhruvil@gmail.com",
-  });
-}
-
-console.log("📨 Notifications:", notifications);
-
-
-
+    console.log("📨 Notifications:", notifications);
 
     // ===============================
-    // 2️⃣ TOTAL COVERAGE (ALL ITEMS)
+    // TOTAL COVERAGE (ALL ITEMS)
     // ===============================
     let totalCoverage = 0;
 
@@ -84,7 +83,7 @@ console.log("📨 Notifications:", notifications);
       const qty = Number(item.quantity || 1);
       let coverage = 0;
 
-      // Try properties first
+      // Try line item properties
       const coverageProp = item.properties?.find(p =>
         p.name?.toLowerCase().includes("coverage")
       );
@@ -102,59 +101,42 @@ console.log("📨 Notifications:", notifications);
       totalCoverage += coverage * qty;
     }
 
+    totalCoverage = Number(totalCoverage.toFixed(2));
     console.log(`📐 Total coverage: ${totalCoverage} m²`);
 
     // ===============================
-    // 3️⃣ PALLET CALCULATION
+    // PALLET CALCULATION (FINAL RULE)
     // ===============================
-    let fullPallets = Math.floor(totalCoverage / FULL_PALLET_SIZE);
-    let remainder = totalCoverage % FULL_PALLET_SIZE;
-    let halfPallets = remainder > 0 ? 1 : 0;
+    let pallets = [];
+    let palletSpaces = 0;
+    let totalWeight = 0;
 
-    // Coverage <= 10 → half pallet
-    if (totalCoverage > 0 && totalCoverage <= 10) {
-      fullPallets = 0;
-      halfPallets = 1;
-    }
+    if (totalCoverage < FULL_PALLET_COVERAGE) {
+      // < 10 m² → HALF pallet
+      pallets.push({ palletType: "H", numberofPallets: "1" });
+      palletSpaces = 1;
+      totalWeight = HALF_PALLET_WEIGHT;
+    } else {
+      // ≥ 10 m² → FULL pallets ONLY
+      const fullPallets = Math.ceil(totalCoverage / FULL_PALLET_COVERAGE);
 
-    const palletSpaces = fullPallets + halfPallets;
-
-    // ===============================
-    // 4️⃣ WEIGHT CALCULATION
-    // ===============================
-    const weightKg =
-      fullPallets * FULL_PALLET_WEIGHT +
-      halfPallets * HALF_PALLET_WEIGHT;
-
-    // ===============================
-    // 5️⃣ PALLET ARRAY
-    // ===============================
-    const pallets = [];
-
-    if (fullPallets > 0) {
       pallets.push({
         palletType: "F",
         numberofPallets: String(fullPallets),
       });
+
+      palletSpaces = fullPallets;
+      totalWeight = fullPallets * FULL_PALLET_WEIGHT;
     }
 
-    if (halfPallets > 0) {
-      pallets.push({
-        palletType: "H",
-        numberofPallets: String(halfPallets),
-      });
-    }
-
-
-
-
-
+    console.log("🧱 Pallets:", pallets);
+    console.log("📦 Pallet spaces:", palletSpaces);
+    console.log("⚖️ Total weight:", totalWeight);
 
     // ===============================
-    // 6️⃣ MANIFEST BUILD
+    // MANIFEST BUILD
     // ===============================
     const consignmentNumber = orderIdStr.slice(-7);
-    
 
     const manifest = {
       accessKey: process.env.PF_ACCESS_KEY,
@@ -202,7 +184,7 @@ console.log("📨 Notifications:", notifications);
 
           pallets,
           palletSpaces: String(palletSpaces),
-          weight: String(weightKg),
+          weight: String(totalWeight),
           serviceName,
 
           customersUniqueReference: orderIdStr,
@@ -215,8 +197,7 @@ console.log("📨 Notifications:", notifications);
             },
           ],
 
-          notifications: notifications,
-
+          notifications,
           additionalDetails: { lines: [] },
         },
       ],
@@ -226,17 +207,17 @@ console.log("📨 Notifications:", notifications);
     console.log(JSON.stringify(manifest, null, 2));
 
     // ===============================
-    // 7️⃣ SEND TO PALLETFORCE
+    // SEND TO PALLETFORCE
     // ===============================
     const response = await axios.post(PALLETFORCE_URL, manifest, {
       headers: { "Content-Type": "application/json" },
-      timeout: 20000,
+      timeout: 30000,
     });
 
     console.log("🚚 Palletforce Response:", response.data);
 
     // ===============================
-    // 8️⃣ SAVE TRACKING TO SHOPIFY
+    // SAVE TRACKING TO SHOPIFY
     // ===============================
     if (
       response.data?.success === true &&
