@@ -112,6 +112,35 @@ app.post("/webhooks/order-paid", async (req, res) => {
       });
     }
 
+
+
+// ===============================
+// NOTIFICATIONS (EMAIL → SMS FALLBACK)
+// ===============================
+let notifications = [];
+
+if (order.email) {
+  notifications.push({
+    notificationType: "EMAIL",
+    value: order.email,
+  });
+} else if (deliveryPhone) {
+  notifications.push({
+    notificationType: "SMS",
+    value: deliveryPhone,
+  });
+} else {
+  // Ultimate fallback (recommended)
+  notifications.push({
+    notificationType: "EMAIL",
+    value: "devodhruvil@gmail.com",
+  });
+}
+
+console.log("📨 Notifications:", notifications);
+
+
+
     // ===============================
     // 6️⃣ MANIFEST BUILD
     // ===============================
@@ -178,12 +207,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
             },
           ],
 
-          notifications: [
-            {
-              notificationType: "email",
-              value: order.email || deliveryPhone,
-            },
-          ],
+          notifications: notifications,
 
           additionalDetails: { lines: [] },
         },
