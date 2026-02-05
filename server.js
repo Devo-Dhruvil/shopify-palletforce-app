@@ -13,45 +13,67 @@ const PALLETFORCE_URL =
 
 const PALLETFORCE_CUSTOMER_ACCOUNT = "indi 001";
 
-// Pallet rules
-const PALLET_CAPACITY = 20; // m²
-const FULL_PALLET_WEIGHT = 1250;
-const HALF_PALLET_WEIGHT = 500;
-
 // ===============================
-// PALLET + WEIGHT CALCULATION
+// 3️⃣ PALLET CALCULATION (FINAL)
 // ===============================
-function calculatePalletsAndWeight(totalCoverage) {
-  const ratio = totalCoverage / PALLET_CAPACITY;
-  const fullBase = Math.floor(ratio);
-  const decimal = ratio - fullBase;
+const PALLET_SIZE = 20;
+const FULL_WEIGHT = 1250;
+const HALF_WEIGHT = 500;
 
-  let fullPallets = fullBase;
-  let halfPallets = 0;
+let fullPallets = 0;
+let halfPallets = 0;
 
-  if (decimal >= 0.6) {
-    halfPallets = 1;
-  } else if (decimal > 0 && fullBase === 0) {
-    halfPallets = 1;
-  } else if (decimal > 0 && fullBase > 0) {
+const ratio = totalCoverage / PALLET_SIZE;
+const integerPart = Math.floor(ratio);
+const decimalPart = ratio - integerPart;
+
+if (ratio <= 0.5) {
+  // ≤ 10m²
+  halfPallets = 1;
+} else if (ratio < 1) {
+  // >10 and <20 → FULL
+  fullPallets = 1;
+} else {
+  fullPallets = integerPart;
+
+  if (decimalPart >= 0.6) {
+    // round UP to full pallet
     fullPallets += 1;
+  } else if (decimalPart > 0) {
+    // small remainder → half pallet
+    halfPallets = 1;
   }
-
-  const pallets = [];
-  if (fullPallets > 0) {
-    pallets.push({ palletType: "F", numberofPallets: String(fullPallets) });
-  }
-  if (halfPallets > 0) {
-    pallets.push({ palletType: "H", numberofPallets: "1" });
-  }
-
-  const palletSpaces = fullPallets + halfPallets;
-  const weight =
-    fullPallets * FULL_PALLET_WEIGHT +
-    halfPallets * HALF_PALLET_WEIGHT;
-
-  return { pallets, palletSpaces, weight };
 }
+
+const palletSpaces = fullPallets + halfPallets;
+
+const weightKg =
+  fullPallets * FULL_WEIGHT +
+  halfPallets * HALF_WEIGHT;
+
+// ===============================
+// 4️⃣ PALLET ARRAY
+// ===============================
+const pallets = [];
+
+if (fullPallets > 0) {
+  pallets.push({
+    palletType: "F",
+    numberofPallets: String(fullPallets),
+  });
+}
+
+if (halfPallets > 0) {
+  pallets.push({
+    palletType: "H",
+    numberofPallets: String(halfPallets),
+  });
+}
+
+console.log("🧱 Pallets:", pallets);
+console.log("📦 Pallet spaces:", palletSpaces);
+console.log("⚖️ Total weight:", weightKg);
+
 
 // ===============================
 // WEBHOOK: ORDER PAID
