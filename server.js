@@ -15,7 +15,7 @@ const PALLETFORCE_CUSTOMER_ACCOUNT = "indi 001";
 
 // Pallet rules
 const PALLET_SIZE = 20;          // m²
-const FULL_WEIGHT = 1250;        // kg
+const FULL_WEIGHT = 1000;        // kg
 const HALF_WEIGHT = 500;         // kg
 
 // ===============================
