@@ -178,11 +178,11 @@ app.post("/webhooks/order-paid", async (req, res) => {
       uniqueTransactionNumber: `SHOPIFY-${orderIdStr}`,
 
       collectionAddress: {
-        name: "Indistone Ltd",
-        streetAddress: "Unit 2, Courtyard 31",
-        location: "Normanton Industrial Estate",
+        name: "Indi Stone Ltd",
+        streetAddress: "Blue House Farm Yard",
+        location: "Deeping St Nicholas",
         town: "Peterborough",
-        postcode: "PE11 1EJ",
+        postcode: "PE11 3DH",
         countryCode: "GB",
         phoneNumber: "01775347904",
         contactName: "Warehouse Team",
