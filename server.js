@@ -76,7 +76,7 @@ function calculatePalletsAndWeight(totalCoverage) {
 app.post("/webhooks/order-paid", async (req, res) => {
   try {
     const order = req.body;
-    const orderId = order.id;
+    const orderId = order.id || order.order_number;
     const orderIdStr = String(orderId);
 
     console.log("🔥 WEBHOOK RECEIVED: ORDER PAID");
