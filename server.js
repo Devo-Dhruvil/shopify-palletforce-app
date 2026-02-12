@@ -233,7 +233,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
           notes: [
             {
               noteName: "NOTE1",
-              value: `Shopify order ${orderNumberStr} | ${totalCoverage}m²`,
+              value: "PLEASE CALL PRIOR TO DELIVERY",
             },
           ],
 
