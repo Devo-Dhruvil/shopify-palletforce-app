@@ -76,11 +76,13 @@ function calculatePalletsAndWeight(totalCoverage) {
 app.post("/webhooks/order-paid", async (req, res) => {
   try {
     const order = req.body;
-    const orderId = order.id || order.order_number;
-//    const orderIdStr = String(orderId);
+    const orderId = order.id; // keep for Shopify API
+    const orderNumber = order.order_number; // use for Palletforce
+    const orderNumberStr = String(orderNumber);
+
 
     console.log("🔥 WEBHOOK RECEIVED: ORDER PAID");
-    console.log("Order ID:", orderIdStr);
+    console.log("Order Number:", orderNumberStr);
 
     // ===============================
     // SERVICE NAME (B / D)
@@ -171,11 +173,11 @@ app.post("/webhooks/order-paid", async (req, res) => {
     // ===============================
     // MANIFEST
     // ===============================
-    const consignmentNumber = orderIdStr.slice(-7);
+    const consignmentNumber = orderNumberStr;
 
     const manifest = {
       accessKey: process.env.PF_ACCESS_KEY,
-      uniqueTransactionNumber: `SHOPIFY-${orderIdStr}`,
+      uniqueTransactionNumber: `SHOPIFY-${orderNumberStr}`,
 
       collectionAddress: {
         name: "Indi Stone Ltd",
@@ -225,13 +227,13 @@ app.post("/webhooks/order-paid", async (req, res) => {
           weight: String(weight),
           serviceName,
 
-          customersUniqueReference: orderIdStr,
+          customersUniqueReference: orderNumberStr,
           insuranceCode: "05",
 
           notes: [
             {
               noteName: "NOTE1",
-              value: `Shopify order ${orderIdStr} | ${totalCoverage}m²`,
+              value: `Shopify order ${orderNumberStr} | ${totalCoverage}m²`,
             },
           ],
 
