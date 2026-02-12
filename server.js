@@ -261,24 +261,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
     console.log("🚚 Palletforce Response:", response.data);
 
-     // ===============================
-    // 8️⃣ SAVE TRACKING TO SHOPIFY
-    // ===============================
-    if (
-      response.data?.success === true &&
-      response.data.successfulTrackingCodes?.length
-    ) {
-      await saveTrackingToShopify(
-        orderId,
-        response.data.successfulTrackingCodes[0]
-      );
-    }
-
-    res.status(200).send("OK");
-  } catch (err) {
-    console.error("❌ ERROR:", err.response?.data || err.message);
-    res.status(500).send("ERROR");
-  }
+   
 });
 
 // ===============================
