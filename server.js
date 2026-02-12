@@ -261,77 +261,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
     console.log("🚚 Palletforce Response:", response.data);
 
-     // ===============================
-    // 8️⃣ SAVE TRACKING TO SHOPIFY
-    // ===============================
-    if (
-      response.data?.success === true &&
-      response.data.successfulTrackingCodes?.length
-    ) {
-      await saveTrackingToShopify(
-        orderId,
-        response.data.successfulTrackingCodes[0]
-      );
-    }
-
-    res.status(200).send("OK");
-  } catch (err) {
-    console.error("❌ ERROR:", err.response?.data || err.message);
-    res.status(500).send("ERROR");
-  }
-});
-
-
-// ===============================
-// SAVE TRACKING TO SHOPIFY
-// ===============================
-async function saveTrackingToShopify(orderId, trackingNumber) {
-  const baseUrl = `https://${process.env.SHOPIFY_SHOP}/admin/api/2024-01`;
-
-  const foRes = await axios.get(
-    `${baseUrl}/orders/${orderId}/fulfillment_orders.json`,
-    {
-      headers: {
-        "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
-      },
-    }
-  );
-
-  const fulfillmentOrder = foRes.data.fulfillment_orders?.find(
-    fo => fo.status === "open"
-  );
-
-  if (!fulfillmentOrder) {
-    console.log("⚠️ No open fulfillment order — skipping Shopify update");
-    return;
-  }
-
-  await axios.post(
-    `${baseUrl}/fulfillments.json`,
-    {
-      fulfillment: {
-        line_items_by_fulfillment_order: [
-          { fulfillment_order_id: fulfillmentOrder.id },
-        ],
-        tracking_info: {
-          number: trackingNumber,
-          company: "Palletforce",
-          url: `https://www.palletforce.com/track/?tracking=${trackingNumber}`,
-        },
-        notify_customer: true,
-      },
-    },
-    {
-      headers: {
-        "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
-        "Content-Type": "application/json",
-      },
-    }
-  );
-
-  console.log("✅ Tracking saved to Shopify:", trackingNumber);
-}
-
+    
 // ===============================
 app.listen(process.env.PORT || 10000, () =>
   console.log("🚀 Server running")
