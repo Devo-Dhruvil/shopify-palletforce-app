@@ -6,7 +6,7 @@ const app = express();
 app.use(express.json());
 
 const shopify = axios.create({
-  baseURL: `https://${process.env.SHOPIFY_STORE}/admin/api/2024-01`,
+  baseURL: `https://${process.env.SHOPIFY_SHOP}/admin/api/2024-01`,
   headers: {
     "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
     "Content-Type": "application/json"
