@@ -274,6 +274,24 @@ app.post("/webhooks/order-paid", async (req, res) => {
     //   );
     // }
 
+    // ===============================
+// SAVE PALLETFORCE TRACKING META
+// ===============================
+async function saveTrackingMetafield(orderId, trackingNumber) {
+  await shopify.post(`/metafields.json`, {
+    metafield: {
+      namespace: "custom",
+      key: "palletforce_tracking",
+      type: "single_line_text_field",
+      value: trackingNumber,
+      owner_id: orderId,
+      owner_resource: "order"
+    }
+  });
+
+  console.log(`💾 Metafield saved → ${trackingNumber}`);
+}
+
     res.status(200).send("OK");
   } catch (err) {
     console.error("❌ ERROR:", err.response?.data || err.message);
