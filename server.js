@@ -309,6 +309,20 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
 
 async function saveTrackingMetafield(orderId, trackingNumber) {
+  const existing = await shopify.get(
+    `/orders/${orderId}/metafields.json`
+  );
+
+  const alreadyExists = existing.data.metafields.some(
+    m => m.namespace === "custom" &&
+         m.key === "palletforce_tracking"
+  );
+
+  if (alreadyExists) {
+    console.log(`⏭ Metafield already exists for order ${orderId}`);
+    return;
+  }
+
   await shopify.post(`/metafields.json`, {
     metafield: {
       namespace: "custom",
@@ -321,7 +335,8 @@ async function saveTrackingMetafield(orderId, trackingNumber) {
   });
 
   console.log(`💾 Metafield saved → ${trackingNumber}`);
-} 
+}
+
 
 
 // ===============================
