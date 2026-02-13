@@ -287,6 +287,16 @@ app.post("/webhooks/order-paid", async (req, res) => {
 // SAVE PALLETFORCE TRACKING META
 // ===============================
 
+    if (
+  response.data?.success === true &&
+  response.data.successfulTrackingCodes?.length > 0
+) {
+  const trackingNumber =
+    response.data.successfulTrackingCodes[0];
+
+  await saveTrackingMetafield(orderId, trackingNumber);
+}
+
 
     res.status(200).send("OK");
   } catch (err) {
@@ -311,18 +321,7 @@ async function saveTrackingMetafield(orderId, trackingNumber) {
   });
 
   console.log(`💾 Metafield saved → ${trackingNumber}`);
-}
-
-if (
-  response.data?.success === true &&
-  response.data.successfulTrackingCodes?.length
-) {
-  const trackingNumber =
-    response.data.successfulTrackingCodes[0];
-
-  await saveTrackingMetafield(orderId, trackingNumber);
-}
-
+} 
 
 
 // ===============================
