@@ -5,6 +5,15 @@ require("dotenv").config();
 const app = express();
 app.use(express.json());
 
+const shopify = axios.create({
+  baseURL: `https://${process.env.SHOPIFY_STORE}/admin/api/2024-01`,
+  headers: {
+    "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
+    "Content-Type": "application/json"
+  }
+});
+
+
 // ===============================
 // CONFIG
 // ===============================
@@ -277,6 +286,18 @@ app.post("/webhooks/order-paid", async (req, res) => {
     // ===============================
 // SAVE PALLETFORCE TRACKING META
 // ===============================
+
+
+    res.status(200).send("OK");
+  } catch (err) {
+    console.error("❌ ERROR:", err.response?.data || err.message);
+    res.status(500).send("ERROR");
+  }
+   
+});
+
+
+
 async function saveTrackingMetafield(orderId, trackingNumber) {
   await shopify.post(`/metafields.json`, {
     metafield: {
@@ -292,13 +313,17 @@ async function saveTrackingMetafield(orderId, trackingNumber) {
   console.log(`💾 Metafield saved → ${trackingNumber}`);
 }
 
-    res.status(200).send("OK");
-  } catch (err) {
-    console.error("❌ ERROR:", err.response?.data || err.message);
-    res.status(500).send("ERROR");
-  }
-   
-});
+if (
+  response.data?.success === true &&
+  response.data.successfulTrackingCodes?.length
+) {
+  const trackingNumber =
+    response.data.successfulTrackingCodes[0];
+
+  await saveTrackingMetafield(orderId, trackingNumber);
+}
+
+
 
 // ===============================
 app.listen(process.env.PORT || 10000, () =>
