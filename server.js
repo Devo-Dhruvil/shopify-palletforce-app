@@ -23,7 +23,8 @@ const PALLETFORCE_CUSTOMER_ACCOUNT = "indi 001";
 
 // ===============================
 // GET VARIANT WEIGHT FROM METAFIELD
-// ===============================async function getVariantWeight(variantId) {
+// ===============================
+async function getVariantWeight(variantId) {
 
   try {
 
