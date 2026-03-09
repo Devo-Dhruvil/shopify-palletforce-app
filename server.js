@@ -134,16 +134,30 @@ let totalWeight = 0;
 for (const item of order.line_items || []) {
 
   const qty = Number(item.quantity || 1);
+  let weightPerUnit = 0;
 
-  // Shopify gives weight in grams
-  const weightGrams = Number(item.grams || 0);
+  // Try Shopify variant grams first
+  if (item.grams && item.grams > 0) {
+    weightPerUnit = item.grams / 1000;
+  }
 
-  const lineWeight = (weightGrams * qty) / 1000; // convert to kg
+  // If grams not available → extract from title/description
+  if (!weightPerUnit) {
 
+    const weightMatch =
+      item.title.match(/(\d+)\s?kg/i) ||
+      item.variant_title?.match(/(\d+)\s?kg/i);
+
+    if (weightMatch) {
+      weightPerUnit = parseFloat(weightMatch[1]);
+    }
+  }
+
+  const lineWeight = weightPerUnit * qty;
   totalWeight += lineWeight;
 
   console.log(
-    `⚖️ ${item.title}: ${weightGrams}g × ${qty} = ${lineWeight}kg`
+    `⚖️ ${item.title}: ${weightPerUnit}kg × ${qty} = ${lineWeight}kg`
   );
 }
 
