@@ -65,34 +65,53 @@ function calculatePalletsAndWeight(totalWeight) {
   let pallets = [];
   let palletSpaces = 0;
 
-  if (totalWeight <= 250) {
+  let remainingWeight = totalWeight;
 
-    pallets.push({
-      palletType: "Q",
-      numberofPallets: "1"
-    });
+  // FULL pallets
+  const fullPallets = Math.floor(remainingWeight / 1250);
 
-    palletSpaces = 0.25;
-
-  } else if (totalWeight <= 500) {
-
-    pallets.push({
-      palletType: "H",
-      numberofPallets: "1"
-    });
-
-    palletSpaces = 0.5;
-
-  } else {
-
-    const fullPallets = Math.ceil(totalWeight / 1250);
+  if (fullPallets > 0) {
 
     pallets.push({
       palletType: "F",
       numberofPallets: String(fullPallets)
     });
 
-    palletSpaces = fullPallets;
+    palletSpaces += fullPallets;
+
+    remainingWeight -= fullPallets * 1250;
+  }
+
+  // Remaining weight
+  if (remainingWeight > 0) {
+
+    if (remainingWeight <= 250) {
+
+      pallets.push({
+        palletType: "Q",
+        numberofPallets: "1"
+      });
+
+      palletSpaces += 0.25;
+
+    } else if (remainingWeight <= 500) {
+
+      pallets.push({
+        palletType: "H",
+        numberofPallets: "1"
+      });
+
+      palletSpaces += 0.5;
+
+    } else {
+
+      pallets.push({
+        palletType: "F",
+        numberofPallets: "1"
+      });
+
+      palletSpaces += 1;
+    }
   }
 
   return {
@@ -101,6 +120,8 @@ function calculatePalletsAndWeight(totalWeight) {
     weight: totalWeight
   };
 }
+
+
 
 // ===============================
 // WEBHOOK
