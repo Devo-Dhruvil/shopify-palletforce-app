@@ -298,8 +298,15 @@ app.post("/webhooks/order-paid", async (req, res) => {
           ],
 
           notifications,
-
-          additionalDetails: { lines: [] }
+surcharges: "",
+          customerCharge: "",
+          nonPalletforceConsignment: "",
+          deliveryVehicleCode: "",
+          consignmentType: "",
+          hubIdentifyingCode: "",
+          cartonCount: "",
+          aSNFBABOLReferenceNumber: "",
+          additionalDetails: { lines: [] },
         }
       ]
     };
