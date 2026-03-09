@@ -252,57 +252,53 @@ console.log("📦 Total Order Weight:", totalWeight);
           "Customer"
       },
 
-      consignments: [
-
+  consignments: [
         {
-
           requestingDepot: "121",
+           collectingDepot: "",
+          deliveryDepot: "",
+          trackingNumber: "",
 
-          consignmentNumber: orderNumber,
-
-          CustomerAccountNumber:
-            PALLETFORCE_CUSTOMER_ACCOUNT,
+          consignmentNumber: consignmentNumber,
+          CustomerAccountNumber: PALLETFORCE_CUSTOMER_ACCOUNT,
 
           datesAndTimes: [
-
             {
-
               dateTimeType: "COLD",
-
               value: new Date(order.created_at)
                 .toISOString()
                 .slice(0, 10)
-                .replace(/-/g, "")
-            }
+                .replace(/-/g, ""),
+            },
           ],
 
           pallets,
-
           palletSpaces: String(palletSpaces),
-
           weight: String(weight),
-
           serviceName,
 
-          customersUniqueReference:
-            orderNumber,
-
+          customersUniqueReference: orderNumberStr,
           insuranceCode: "05",
 
           notes: [
-
             {
               noteName: "NOTE1",
-              value:
-                "PLEASE CALL PRIOR TO DELIVERY"
-            }
+              value: "PLEASE CALL PRIOR TO DELIVERY",
+            },
           ],
 
           notifications,
-
-          additionalDetails: { lines: [] }
-        }
-      ]
+          surcharges: "",
+          customerCharge: "",
+          nonPalletforceConsignment: "",
+          deliveryVehicleCode: "",
+          consignmentType: "",
+          hubIdentifyingCode: "",
+          cartonCount: "",
+          aSNFBABOLReferenceNumber: "",
+          additionalDetails: { lines: [] },
+        },
+      ],
     };
 
     console.log("📤 Sending Manifest");
