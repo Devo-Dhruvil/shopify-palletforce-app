@@ -304,11 +304,8 @@ app.post("/webhooks/order-paid", async (req, res) => {
           pallets,
           palletSpaces: String(palletSpaces),
           weight: String(weight),
-
           serviceName,
-
           customersUniqueReference: orderNumber,
-
           insuranceCode: "05",
 
           notes: [
@@ -319,7 +316,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
           ],
 
           notifications,
-surcharges: "",
+          surcharges: "",
           customerCharge: "",
           nonPalletforceConsignment: "",
           deliveryVehicleCode: "",
@@ -348,18 +345,74 @@ surcharges: "",
 
     console.log("🚚 Palletforce Response:", response.data);
 
+
+     // ===============================
+    // 8️⃣ SAVE TRACKING TO SHOPIFY
+    // ===============================
+    // if (
+    //   response.data?.success === true &&
+    //   response.data.successfulTrackingCodes?.length
+    // ) {
+    //   await saveTrackingToShopify(
+    //     orderId,
+    //     response.data.successfulTrackingCodes[0]
+    //   );
+    // }
+
+    // ===============================
+// SAVE PALLETFORCE TRACKING META
+// ===============================
+
+  if (
+  response.data?.success === true &&
+  response.data.successfulTrackingCodes?.length > 0
+) {
+  const trackingNumber =
+    response.data.successfulTrackingCodes[0];
+
+  await saveTrackingMetafield(orderId, trackingNumber);
+}
+
+
     res.status(200).send("OK");
-
   } catch (err) {
-
-    console.error(
-      "❌ ERROR:",
-      err.response?.data || err.message
-    );
-
+    console.error("❌ ERROR:", err.response?.data || err.message);
     res.status(500).send("ERROR");
   }
+   
 });
+
+
+
+async function saveTrackingMetafield(orderId, trackingNumber) {
+  const existing = await shopify.get(
+    `/orders/${orderId}/metafields.json`
+  );
+
+  const alreadyExists = existing.data.metafields.some(
+    m => m.namespace === "custom" &&
+         m.key === "palletforce_tracking"
+  );
+
+  if (alreadyExists) {
+    console.log(`⏭ Metafield already exists for order ${orderId}`);
+    return;
+  }
+
+  await shopify.post(`/metafields.json`, {
+    metafield: {
+      namespace: "custom",
+      key: "palletforce_tracking",
+      type: "single_line_text_field",
+      value: trackingNumber,
+      owner_id: orderId,
+      owner_resource: "order"
+    }
+  });
+
+  console.log(`💾 Metafield saved → ${trackingNumber}`);
+}
+
 
 // ===============================
 app.listen(process.env.PORT || 10000, () =>
