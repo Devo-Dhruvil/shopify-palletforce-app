@@ -22,37 +22,8 @@ const PALLETFORCE_URL =
 const PALLETFORCE_CUSTOMER_ACCOUNT = "indi 001";
 
 // ===============================
-// PALLET CALCULATION
+// GET VARIANT WEIGHT FROM METAFIELD
 // ===============================
-function calculatePalletsAndWeight(totalWeight) {
-
-  let pallets = [];
-  let palletSpaces = 0;
-
-  if (totalWeight <= 250) {
-    pallets.push({ palletType: "Q", numberofPallets: "1" });
-    palletSpaces = 0.25;
-  } 
-  else if (totalWeight <= 500) {
-    pallets.push({ palletType: "H", numberofPallets: "1" });
-    palletSpaces = 0.5;
-  } 
-  else {
-    const fullPallets = Math.ceil(totalWeight / 1250);
-    pallets.push({
-      palletType: "F",
-      numberofPallets: String(fullPallets)
-    });
-    palletSpaces = fullPallets;
-  }
-
-  return {
-    pallets,
-    palletSpaces,
-    weight: totalWeight
-  };
-}
-
 async function getVariantWeight(variantId) {
 
   try {
@@ -82,6 +53,51 @@ async function getVariantWeight(variantId) {
 }
 
 // ===============================
+// PALLET CALCULATION
+// ===============================
+function calculatePalletsAndWeight(totalWeight) {
+
+  let pallets = [];
+  let palletSpaces = 0;
+
+  if (totalWeight <= 250) {
+
+    pallets.push({
+      palletType: "Q",
+      numberofPallets: "1"
+    });
+
+    palletSpaces = 0.25;
+
+  } else if (totalWeight <= 500) {
+
+    pallets.push({
+      palletType: "H",
+      numberofPallets: "1"
+    });
+
+    palletSpaces = 0.5;
+
+  } else {
+
+    const fullPallets = Math.ceil(totalWeight / 1250);
+
+    pallets.push({
+      palletType: "F",
+      numberofPallets: String(fullPallets)
+    });
+
+    palletSpaces = fullPallets;
+  }
+
+  return {
+    pallets,
+    palletSpaces,
+    weight: totalWeight
+  };
+}
+
+// ===============================
 // WEBHOOK
 // ===============================
 app.post("/webhooks/order-paid", async (req, res) => {
@@ -96,11 +112,12 @@ app.post("/webhooks/order-paid", async (req, res) => {
     console.log("Order Number:", orderNumber);
 
     // ===============================
-    // SHIPPING SERVICE
+    // SERVICE NAME
     // ===============================
     let serviceName = "B";
 
-    const shippingPrice = Number(order.shipping_lines?.[0]?.price || 0);
+    const shippingPrice =
+      Number(order.shipping_lines?.[0]?.price || 0);
 
     if (shippingPrice === 0) serviceName = "D";
 
@@ -108,7 +125,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
     console.log("📦 Service:", serviceName);
 
     // ===============================
-    // PHONE
+    // DELIVERY PHONE
     // ===============================
     const deliveryPhone =
       order.shipping_address?.phone ||
@@ -121,45 +138,47 @@ app.post("/webhooks/order-paid", async (req, res) => {
     let notifications = [];
 
     if (order.email) {
+
       notifications.push({
         notificationType: "EMAIL",
         value: order.email
       });
+
     } else {
+
       notifications.push({
         notificationType: "SMS",
         value: deliveryPhone
       });
+
     }
 
     console.log("📨 Notifications:", notifications);
 
-// ===============================
-// TOTAL ORDER WEIGHT FROM METAFIELD
-// ===============================
+    // ===============================
+    // TOTAL ORDER WEIGHT
+    // ===============================
+    let totalWeight = 0;
 
-let totalWeight = 0;
+    for (const item of order.line_items || []) {
 
-for (const item of order.line_items || []) {
+      const qty = Number(item.quantity || 1);
 
-  const qty = Number(item.quantity || 1);
+      const weightPerUnit =
+        await getVariantWeight(item.variant_id);
 
-  let weightPerUnit = await getVariantWeight(
-    item.variant_id
-  );
+      const lineWeight = weightPerUnit * qty;
 
-  const lineWeight = weightPerUnit * qty;
+      totalWeight += lineWeight;
 
-  totalWeight += lineWeight;
+      console.log(
+        `⚖️ ${item.title}: ${weightPerUnit}kg × ${qty} = ${lineWeight}kg`
+      );
+    }
 
-  console.log(
-    `⚖️ ${item.title}: ${weightPerUnit}kg × ${qty} = ${lineWeight}kg`
-  );
-}
+    totalWeight = Math.round(totalWeight);
 
-totalWeight = Math.round(totalWeight);
-
-console.log(`📦 Total Order Weight: ${totalWeight} kg`);
+    console.log("📦 Total Order Weight:", totalWeight);
 
     // ===============================
     // PALLET LOGIC
@@ -172,14 +191,17 @@ console.log(`📦 Total Order Weight: ${totalWeight} kg`);
     console.log("⚖️ Weight:", weight);
 
     // ===============================
-    // PALLETFORCE MANIFEST
+    // MANIFEST
     // ===============================
     const manifest = {
 
       accessKey: process.env.PF_ACCESS_KEY,
-      uniqueTransactionNumber: `SHOPIFY-${orderNumber}`,
+
+      uniqueTransactionNumber:
+        `SHOPIFY-${orderNumber}`,
 
       collectionAddress: {
+
         name: "Indi Stone Ltd",
         streetAddress: "Blue House Farm Yard",
         location: "Deeping St Nicholas",
@@ -191,27 +213,53 @@ console.log(`📦 Total Order Weight: ${totalWeight} kg`);
       },
 
       deliveryAddress: {
-        name: order.shipping_address?.name || "Customer",
-        streetAddress: order.shipping_address?.address1 || "",
-        location: order.shipping_address?.address2 || "",
-        town: order.shipping_address?.city || "",
-        county: order.shipping_address?.province || "",
-        postcode: order.shipping_address?.zip || "",
-        countryCode: order.shipping_address?.country_code || "GB",
+
+        name:
+          order.shipping_address?.name ||
+          "Customer",
+
+        streetAddress:
+          order.shipping_address?.address1 || "",
+
+        location:
+          order.shipping_address?.address2 || "",
+
+        town:
+          order.shipping_address?.city || "",
+
+        county:
+          order.shipping_address?.province || "",
+
+        postcode:
+          order.shipping_address?.zip || "",
+
+        countryCode:
+          order.shipping_address?.country_code || "GB",
+
         phoneNumber: deliveryPhone,
-        contactName: order.shipping_address?.name || "Customer"
+
+        contactName:
+          order.shipping_address?.name ||
+          "Customer"
       },
 
       consignments: [
+
         {
+
           requestingDepot: "121",
 
           consignmentNumber: orderNumber,
-          CustomerAccountNumber: PALLETFORCE_CUSTOMER_ACCOUNT,
+
+          CustomerAccountNumber:
+            PALLETFORCE_CUSTOMER_ACCOUNT,
 
           datesAndTimes: [
+
             {
+
               dateTimeType: "COLD",
+
               value: new Date(order.created_at)
                 .toISOString()
                 .slice(0, 10)
@@ -220,18 +268,24 @@ console.log(`📦 Total Order Weight: ${totalWeight} kg`);
           ],
 
           pallets,
+
           palletSpaces: String(palletSpaces),
+
           weight: String(weight),
 
           serviceName,
 
-          customersUniqueReference: orderNumber,
+          customersUniqueReference:
+            orderNumber,
+
           insuranceCode: "05",
 
           notes: [
+
             {
               noteName: "NOTE1",
-              value: "PLEASE CALL PRIOR TO DELIVERY"
+              value:
+                "PLEASE CALL PRIOR TO DELIVERY"
             }
           ],
 
@@ -248,35 +302,15 @@ console.log(`📦 Total Order Weight: ${totalWeight} kg`);
     const response = await axios.post(
       PALLETFORCE_URL,
       manifest,
-      { headers: { "Content-Type": "application/json" } }
+      {
+        headers: {
+          "Content-Type": "application/json"
+        },
+        timeout: 20000
+      }
     );
 
     console.log("🚚 Palletforce Response:", response.data);
-
-    // ===============================
-    // SAVE TRACKING
-    // ===============================
-    if (
-      response.data?.success === true &&
-      response.data.successfulTrackingCodes?.length
-    ) {
-
-      const trackingNumber =
-        response.data.successfulTrackingCodes[0];
-
-      await shopify.post(`/metafields.json`, {
-        metafield: {
-          namespace: "custom",
-          key: "palletforce_tracking",
-          type: "single_line_text_field",
-          value: trackingNumber,
-          owner_id: orderId,
-          owner_resource: "order"
-        }
-      });
-
-      console.log("💾 Tracking saved:", trackingNumber);
-    }
 
     res.status(200).send("OK");
 
