@@ -5,6 +5,9 @@ require("dotenv").config();
 const app = express();
 app.use(express.json());
 
+// ===============================
+// SHOPIFY API
+// ===============================
 const shopify = axios.create({
   baseURL: `https://${process.env.SHOPIFY_SHOP}/admin/api/2024-01`,
   headers: {
@@ -22,38 +25,35 @@ const PALLETFORCE_URL =
 const PALLETFORCE_CUSTOMER_ACCOUNT = "indi 001";
 
 // ===============================
-// GET VARIANT WEIGHT FROM METAFIELD
+// GET VARIANT WEIGHT
 // ===============================
 async function getVariantWeight(variantId) {
-
   try {
 
     const res = await shopify.get(
       `/variants/${variantId}/metafields.json`
     );
 
-    const weightMeta = res.data.metafields.find(
+    const metafield = res.data.metafields.find(
       m => m.namespace === "custom" && m.key === "product_weight"
     );
 
-    if (!weightMeta) return 0;
+    if (!metafield) return 0;
 
-    let value = weightMeta.value;
+    let value = metafield.value;
 
-    // If metafield is JSON (measurement type)
     if (value.startsWith("{")) {
       const parsed = JSON.parse(value);
       return Number(parsed.value) || 0;
     }
 
-    // If plain number
     return Number(value) || 0;
 
   } catch (err) {
 
     console.error("Metafield error:", err.message);
-    return 0;
 
+    return 0;
   }
 }
 
@@ -110,6 +110,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
   try {
 
     const order = req.body;
+
     const orderId = order.id;
     const orderNumber = String(order.order_number);
 
@@ -160,34 +161,34 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
     console.log("📨 Notifications:", notifications);
 
- // ===============================
-// TOTAL ORDER WEIGHT
-// ===============================
-let totalWeight = 0;
+    // ===============================
+    // TOTAL ORDER WEIGHT
+    // ===============================
+    let totalWeight = 0;
 
-for (const item of order.line_items || []) {
+    for (const item of order.line_items || []) {
 
-  const qty = Number(item.quantity || 1);
+      const qty = Number(item.quantity || 1);
 
-  let weightPerUnit =
-    await getVariantWeight(item.variant_id);
+      let weightPerUnit =
+        await getVariantWeight(item.variant_id);
 
-  if (!weightPerUnit || isNaN(weightPerUnit)) {
-    weightPerUnit = 0;
-  }
+      if (!weightPerUnit || isNaN(weightPerUnit)) {
+        weightPerUnit = 0;
+      }
 
-  const lineWeight = weightPerUnit * qty;
+      const lineWeight = weightPerUnit * qty;
 
-  totalWeight += lineWeight;
+      totalWeight += lineWeight;
 
-  console.log(
-    `⚖️ ${item.title}: ${weightPerUnit}kg × ${qty} = ${lineWeight}kg`
-  );
-}
+      console.log(
+        `⚖️ ${item.title}: ${weightPerUnit}kg × ${qty} = ${lineWeight}kg`
+      );
+    }
 
-totalWeight = Math.round(totalWeight);
+    totalWeight = Math.round(totalWeight);
 
-console.log("📦 Total Order Weight:", totalWeight);
+    console.log("📦 Total Order Weight:", totalWeight);
 
     // ===============================
     // PALLET LOGIC
@@ -200,6 +201,11 @@ console.log("📦 Total Order Weight:", totalWeight);
     console.log("⚖️ Weight:", weight);
 
     // ===============================
+    // CONSIGNMENT NUMBER
+    // ===============================
+    const consignmentNumber = orderNumber;
+
+    // ===============================
     // MANIFEST
     // ===============================
     const manifest = {
@@ -210,7 +216,6 @@ console.log("📦 Total Order Weight:", totalWeight);
         `SHOPIFY-${orderNumber}`,
 
       collectionAddress: {
-
         name: "Indi Stone Ltd",
         streetAddress: "Blue House Farm Yard",
         location: "Deeping St Nicholas",
@@ -222,7 +227,6 @@ console.log("📦 Total Order Weight:", totalWeight);
       },
 
       deliveryAddress: {
-
         name:
           order.shipping_address?.name ||
           "Customer",
@@ -252,15 +256,19 @@ console.log("📦 Total Order Weight:", totalWeight);
           "Customer"
       },
 
-  consignments: [
+      consignments: [
+
         {
+
           requestingDepot: "121",
-           collectingDepot: "",
+          collectingDepot: "121",
           deliveryDepot: "",
           trackingNumber: "",
 
           consignmentNumber: consignmentNumber,
-          CustomerAccountNumber: PALLETFORCE_CUSTOMER_ACCOUNT,
+
+          CustomerAccountNumber:
+            PALLETFORCE_CUSTOMER_ACCOUNT,
 
           datesAndTimes: [
             {
@@ -268,37 +276,32 @@ console.log("📦 Total Order Weight:", totalWeight);
               value: new Date(order.created_at)
                 .toISOString()
                 .slice(0, 10)
-                .replace(/-/g, ""),
-            },
+                .replace(/-/g, "")
+            }
           ],
 
           pallets,
           palletSpaces: String(palletSpaces),
           weight: String(weight),
+
           serviceName,
 
-          customersUniqueReference: orderNumberStr,
+          customersUniqueReference: orderNumber,
+
           insuranceCode: "05",
 
           notes: [
             {
               noteName: "NOTE1",
-              value: "PLEASE CALL PRIOR TO DELIVERY",
-            },
+              value: "PLEASE CALL PRIOR TO DELIVERY"
+            }
           ],
 
           notifications,
-          surcharges: "",
-          customerCharge: "",
-          nonPalletforceConsignment: "",
-          deliveryVehicleCode: "",
-          consignmentType: "",
-          hubIdentifyingCode: "",
-          cartonCount: "",
-          aSNFBABOLReferenceNumber: "",
-          additionalDetails: { lines: [] },
-        },
-      ],
+
+          additionalDetails: { lines: [] }
+        }
+      ]
     };
 
     console.log("📤 Sending Manifest");
