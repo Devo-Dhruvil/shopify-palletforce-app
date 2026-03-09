@@ -23,8 +23,7 @@ const PALLETFORCE_CUSTOMER_ACCOUNT = "indi 001";
 
 // ===============================
 // GET VARIANT WEIGHT FROM METAFIELD
-// ===============================
-async function getVariantWeight(variantId) {
+// ===============================async function getVariantWeight(variantId) {
 
   try {
 
@@ -33,22 +32,27 @@ async function getVariantWeight(variantId) {
     );
 
     const weightMeta = res.data.metafields.find(
-      m =>
-        m.namespace === "custom" &&
-        m.key === "product_weight"
+      m => m.namespace === "custom" && m.key === "product_weight"
     );
 
-    if (weightMeta) {
-      return parseFloat(weightMeta.value);
+    if (!weightMeta) return 0;
+
+    let value = weightMeta.value;
+
+    // If metafield is JSON (measurement type)
+    if (value.startsWith("{")) {
+      const parsed = JSON.parse(value);
+      return Number(parsed.value) || 0;
     }
 
-    return 0;
+    // If plain number
+    return Number(value) || 0;
 
   } catch (err) {
 
     console.error("Metafield error:", err.message);
-
     return 0;
+
   }
 }
 
@@ -155,30 +159,34 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
     console.log("📨 Notifications:", notifications);
 
-    // ===============================
-    // TOTAL ORDER WEIGHT
-    // ===============================
-    let totalWeight = 0;
+ // ===============================
+// TOTAL ORDER WEIGHT
+// ===============================
+let totalWeight = 0;
 
-    for (const item of order.line_items || []) {
+for (const item of order.line_items || []) {
 
-      const qty = Number(item.quantity || 1);
+  const qty = Number(item.quantity || 1);
 
-      const weightPerUnit =
-        await getVariantWeight(item.variant_id);
+  let weightPerUnit =
+    await getVariantWeight(item.variant_id);
 
-      const lineWeight = weightPerUnit * qty;
+  if (!weightPerUnit || isNaN(weightPerUnit)) {
+    weightPerUnit = 0;
+  }
 
-      totalWeight += lineWeight;
+  const lineWeight = weightPerUnit * qty;
 
-      console.log(
-        `⚖️ ${item.title}: ${weightPerUnit}kg × ${qty} = ${lineWeight}kg`
-      );
-    }
+  totalWeight += lineWeight;
 
-    totalWeight = Math.round(totalWeight);
+  console.log(
+    `⚖️ ${item.title}: ${weightPerUnit}kg × ${qty} = ${lineWeight}kg`
+  );
+}
 
-    console.log("📦 Total Order Weight:", totalWeight);
+totalWeight = Math.round(totalWeight);
+
+console.log("📦 Total Order Weight:", totalWeight);
 
     // ===============================
     // PALLET LOGIC
