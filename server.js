@@ -67,6 +67,7 @@ function calculatePalletsAndWeight(totalWeight) {
 
   let remainingWeight = totalWeight;
 
+  // FULL pallets
   const fullPallets = Math.floor(remainingWeight / 1250);
 
   if (fullPallets > 0) {
@@ -81,6 +82,7 @@ function calculatePalletsAndWeight(totalWeight) {
     remainingWeight -= fullPallets * 1250;
   }
 
+  // Remaining weight
   if (remainingWeight > 0) {
 
     if (remainingWeight <= 250) {
@@ -90,7 +92,7 @@ function calculatePalletsAndWeight(totalWeight) {
         numberofPallets: "1"
       });
 
-      palletSpaces += 1;
+      palletSpaces += 0.25;
 
     } else if (remainingWeight <= 500) {
 
@@ -99,7 +101,7 @@ function calculatePalletsAndWeight(totalWeight) {
         numberofPallets: "1"
       });
 
-      palletSpaces += 1;
+      palletSpaces += 0.5;
 
     } else {
 
@@ -120,6 +122,7 @@ function calculatePalletsAndWeight(totalWeight) {
 }
 
 
+
 // ===============================
 // WEBHOOK
 // ===============================
@@ -127,16 +130,16 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
   try {
 
-    const order = req.body;
-
-    const orderId = order.id;
-    const orderNumber = String(order.order_number);
+   const order = req.body;
+    const orderId = order.id; // keep for Shopify API
+    const orderNumber = order.order_number; // use for Palletforce
+    const orderNumberStr = String(orderNumber);
 
     console.log("🔥 WEBHOOK RECEIVED: ORDER PAID");
     console.log("Order Number:", orderNumber);
 
     // ===============================
-    // SERVICE NAME
+   // SERVICE NAME (B / D)
     // ===============================
     let serviceName = "B";
 
@@ -159,22 +162,17 @@ app.post("/webhooks/order-paid", async (req, res) => {
     // ===============================
     // NOTIFICATIONS
     // ===============================
-    let notifications = [];
+let notifications = [];
 
     if (order.email) {
-
+      notifications.push({ notificationType: "EMAIL", value: order.email });
+    } else if (deliveryPhone) {
+      notifications.push({ notificationType: "SMS", value: deliveryPhone });
+    } else {
       notifications.push({
         notificationType: "EMAIL",
-        value: order.email
+        value: "devodhruvil@gmail.com",
       });
-
-    } else {
-
-      notifications.push({
-        notificationType: "SMS",
-        value: deliveryPhone
-      });
-
     }
 
     console.log("📨 Notifications:", notifications);
@@ -230,8 +228,7 @@ app.post("/webhooks/order-paid", async (req, res) => {
 
       accessKey: process.env.PF_ACCESS_KEY,
 
-      uniqueTransactionNumber:
-        `SHOPIFY-${orderNumber}`,
+      uniqueTransactionNumber: `SHOPIFY-${orderNumber}`,
 
       collectionAddress: {
         name: "Indi Stone Ltd",
@@ -245,33 +242,15 @@ app.post("/webhooks/order-paid", async (req, res) => {
       },
 
       deliveryAddress: {
-        name:
-          order.shipping_address?.name ||
-          "Customer",
-
-        streetAddress:
-          order.shipping_address?.address1 || "",
-
-        location:
-          order.shipping_address?.address2 || "",
-
-        town:
-          order.shipping_address?.city || "",
-
-        county:
-          order.shipping_address?.province || "",
-
-        postcode:
-          order.shipping_address?.zip || "",
-
-        countryCode:
-          order.shipping_address?.country_code || "GB",
-
+         name: order.shipping_address?.name || "Customer",
+        streetAddress: order.shipping_address?.address1 || "",
+        location: order.shipping_address?.address2 || "",
+        town: order.shipping_address?.city || "",
+        county: order.shipping_address?.province || "",
+        postcode: order.shipping_address?.zip || "",
+        countryCode: order.shipping_address?.country_code || "GB",
         phoneNumber: deliveryPhone,
-
-        contactName:
-          order.shipping_address?.name ||
-          "Customer"
+        contactName: order.shipping_address?.name || "Customer",
       },
 
       consignments: [
@@ -279,14 +258,12 @@ app.post("/webhooks/order-paid", async (req, res) => {
         {
 
           requestingDepot: "121",
-          collectingDepot: "121",
+          collectingDepot: "",
           deliveryDepot: "",
           trackingNumber: "",
 
           consignmentNumber: consignmentNumber,
-
-          CustomerAccountNumber:
-            PALLETFORCE_CUSTOMER_ACCOUNT,
+          CustomerAccountNumber: PALLETFORCE_CUSTOMER_ACCOUNT,
 
           datesAndTimes: [
             {
@@ -302,7 +279,8 @@ app.post("/webhooks/order-paid", async (req, res) => {
           palletSpaces: String(palletSpaces),
           weight: String(weight),
           serviceName,
-          customersUniqueReference: orderNumber,
+          
+          customersUniqueReference: orderNumberStr,
           insuranceCode: "05",
 
           notes: [
@@ -326,19 +304,13 @@ app.post("/webhooks/order-paid", async (req, res) => {
       ]
     };
 
-    console.log("📤 Sending Manifest");
+    console.log("📤 Sending Manifest to Palletforce");
     console.log(JSON.stringify(manifest, null, 2));
 
-    const response = await axios.post(
-      PALLETFORCE_URL,
-      manifest,
-      {
-        headers: {
-          "Content-Type": "application/json"
-        },
-        timeout: 20000
-      }
-    );
+    const response = await axios.post(PALLETFORCE_URL, manifest, {
+      headers: { "Content-Type": "application/json" },
+      timeout: 20000,
+    });
 
     console.log("🚚 Palletforce Response:", response.data);
 
