@@ -67,7 +67,6 @@ function calculatePalletsAndWeight(totalWeight) {
 
   let remainingWeight = totalWeight;
 
-  // FULL pallets
   const fullPallets = Math.floor(remainingWeight / 1250);
 
   if (fullPallets > 0) {
@@ -82,7 +81,6 @@ function calculatePalletsAndWeight(totalWeight) {
     remainingWeight -= fullPallets * 1250;
   }
 
-  // Remaining weight
   if (remainingWeight > 0) {
 
     if (remainingWeight <= 250) {
@@ -92,7 +90,7 @@ function calculatePalletsAndWeight(totalWeight) {
         numberofPallets: "1"
       });
 
-      palletSpaces += 0.25;
+      palletSpaces += 1;
 
     } else if (remainingWeight <= 500) {
 
@@ -101,7 +99,7 @@ function calculatePalletsAndWeight(totalWeight) {
         numberofPallets: "1"
       });
 
-      palletSpaces += 0.5;
+      palletSpaces += 1;
 
     } else {
 
